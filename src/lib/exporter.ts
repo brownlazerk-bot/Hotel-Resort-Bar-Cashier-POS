@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import { DailyReportData, Order, Shift } from '../types';
+import { formatCurrency } from './currency';
 
 export function printReportHTML(title: string, htmlContent: string) {
   const printWindow = window.open('', '_blank');
@@ -85,11 +86,11 @@ export function exportDailyReportPDF(report: DailyReportData) {
   doc.setFont('Helvetica', 'normal');
   doc.setFontSize(10);
   const metrics = [
-    ['Gross Revenue:', `$${report.grossRevenue.toFixed(2)}`, 'Total Transactions:', `${report.totalTransactions}`],
-    ['Taxes (VAT):', `$${report.taxes.toFixed(2)}`, 'Discounts Applied:', `$${report.discounts.toFixed(2)}`],
-    ['NET REVENUE:', `$${report.netRevenue.toFixed(2)}`, 'Cash Collected:', `$${report.cashCollected.toFixed(2)}`],
-    ['Card Collected:', `$${report.cardCollected.toFixed(2)}`, 'Mobile Money:', `$${report.mobileMoneyCollected.toFixed(2)}`],
-    ['Room/Apt Charges:', `$${report.outstandingRoomCharges.toFixed(2)}`, 'Current Stock Value:', `$${report.currentStockValue.toFixed(2)}`],
+    ['Gross Revenue:', formatCurrency(report.grossRevenue), 'Total Transactions:', `${report.totalTransactions}`],
+    ['Taxes (VAT):', formatCurrency(report.taxes), 'Discounts Applied:', formatCurrency(report.discounts)],
+    ['NET REVENUE:', formatCurrency(report.netRevenue), 'Cash Collected:', formatCurrency(report.cashCollected)],
+    ['Card Collected:', formatCurrency(report.cardCollected), 'Mobile Money:', formatCurrency(report.mobileMoneyCollected)],
+    ['Room/Apt Charges:', formatCurrency(report.outstandingRoomCharges), 'Current Stock Value:', formatCurrency(report.currentStockValue)],
   ];
 
   metrics.forEach(([lbl1, val1, lbl2, val2]) => {
@@ -119,12 +120,12 @@ export function exportDailyReportPDF(report: DailyReportData) {
   doc.setFontSize(10);
   doc.setFont('Helvetica', 'normal');
   const deptBreakdown = [
-    ['Bar (Drink Sales):', `$${report.totalDrinkSales.toFixed(2)} (${report.drinksSoldQty} units)`],
-    ['Restaurant (Food Orders):', `$${report.foodRevenue.toFixed(2)} (${report.totalFoodOrders} orders)`],
-    ['Swimming Pool Passes:', `$${report.poolRevenue.toFixed(2)} (${report.poolVisitorsCount} passes)`],
-    ['Sauna & Steam Sessions:', `$${report.saunaRevenue.toFixed(2)} (${report.saunaVisitorsCount} sessions)`],
-    ['Hotel Guest Room Charges:', `$${report.roomRevenue.toFixed(2)}`],
-    ['Apartment Suite Charges:', `$${report.apartmentRevenue.toFixed(2)}`],
+    ['Bar (Drink Sales):', `${formatCurrency(report.totalDrinkSales)} (${report.drinksSoldQty} units)`],
+    ['Restaurant (Food Orders):', `${formatCurrency(report.foodRevenue)} (${report.totalFoodOrders} orders)`],
+    ['Swimming Pool Passes:', `${formatCurrency(report.poolRevenue)} (${report.poolVisitorsCount} passes)`],
+    ['Sauna & Steam Sessions:', `${formatCurrency(report.saunaRevenue)} (${report.saunaVisitorsCount} sessions)`],
+    ['Hotel Guest Room Charges:', formatCurrency(report.roomRevenue)],
+    ['Apartment Suite Charges:', formatCurrency(report.apartmentRevenue)],
   ];
 
   deptBreakdown.forEach(([dept, amount]) => {
@@ -162,7 +163,7 @@ export function exportDailyReportPDF(report: DailyReportData) {
     report.bestSellingDrinks.forEach((item) => {
       doc.text(item.name, 14, y);
       doc.text(`${item.qty}`, 120, y);
-      doc.text(`$${item.revenue.toFixed(2)}`, 160, y);
+      doc.text(formatCurrency(item.revenue), 160, y);
       y += 5;
     });
   }
@@ -186,19 +187,19 @@ export function exportDailyReportExcel(report: DailyReportData) {
     [`Generated At`, new Date(report.generatedAt).toLocaleString()],
     [`Cashier Name`, report.cashierName],
     [],
-    ['FINANCIAL SUMMARY METRIC', 'VALUE ($)'],
+    ['FINANCIAL SUMMARY METRIC', 'VALUE (RWF)'],
     ['Gross Revenue', report.grossRevenue],
     ['Taxes (VAT 18%)', report.taxes],
     ['Discounts Applied', report.discounts],
     ['NET REVENUE', report.netRevenue],
     [],
-    ['PAYMENT METHOD BREAKDOWN', 'COLLECTED AMOUNT ($)'],
+    ['PAYMENT METHOD BREAKDOWN', 'COLLECTED AMOUNT (RWF)'],
     ['Cash Collected', report.cashCollected],
     ['Card Payment', report.cardCollected],
     ['Mobile Money (MoMo)', report.mobileMoneyCollected],
     ['Room & Apartment Charges', report.outstandingRoomCharges],
     [],
-    ['DEPARTMENTAL REVENUES', 'REVENUE ($)', 'VOLUME'],
+    ['DEPARTMENTAL REVENUES', 'REVENUE (RWF)', 'VOLUME'],
     ['Bar (Drink Sales)', report.totalDrinkSales, `${report.drinksSoldQty} units`],
     ['Restaurant (Food Orders)', report.foodRevenue, `${report.totalFoodOrders} orders`],
     ['Swimming Pool', report.poolRevenue, `${report.poolVisitorsCount} passes`],
@@ -213,7 +214,7 @@ export function exportDailyReportExcel(report: DailyReportData) {
   // Bestsellers Sheet
   const bestData = [
     ['TOP SELLING DRINKS'],
-    ['Drink Name', 'Quantity Sold', 'Total Revenue ($)'],
+    ['Drink Name', 'Quantity Sold', 'Total Revenue (RWF)'],
     ...report.bestSellingDrinks.map(b => [b.name, b.qty, b.revenue])
   ];
   const wsBest = XLSX.utils.aoa_to_sheet(bestData);
@@ -253,11 +254,11 @@ export function exportShiftReportPDF(shift: Shift, orders: Order[]) {
 
   doc.setFont('Helvetica', 'normal');
   const cashRows = [
-    ['Opening Cash Float:', `$${shift.openingCash.toFixed(2)}`],
-    ['Cash Sales Collected:', `$${cashTotal.toFixed(2)}`],
-    ['Expected Cash in Drawer:', `$${(shift.openingCash + cashTotal).toFixed(2)}`],
-    ['Actual Cash Counted:', shift.closingCashActual !== undefined ? `$${shift.closingCashActual.toFixed(2)}` : 'Shift Still Open'],
-    ['Discrepancy (Over/Short):', shift.difference !== undefined ? `$${shift.difference.toFixed(2)}` : 'N/A'],
+    ['Opening Cash Float:', formatCurrency(shift.openingCash)],
+    ['Cash Sales Collected:', formatCurrency(cashTotal)],
+    ['Expected Cash in Drawer:', formatCurrency(shift.openingCash + cashTotal)],
+    ['Actual Cash Counted:', shift.closingCashActual !== undefined ? formatCurrency(shift.closingCashActual) : 'Shift Still Open'],
+    ['Discrepancy (Over/Short):', shift.difference !== undefined ? formatCurrency(shift.difference) : 'N/A'],
   ];
 
   cashRows.forEach(([lbl, val]) => {
@@ -278,10 +279,10 @@ export function exportShiftReportPDF(shift: Shift, orders: Order[]) {
 
   doc.setFont('Helvetica', 'normal');
   const revRows = [
-    ['Total Shift Revenue:', `$${totalRev.toFixed(2)}`],
-    ['Card Revenue:', `$${cardTotal.toFixed(2)}`],
-    ['Mobile Money Revenue:', `$${momoTotal.toFixed(2)}`],
-    ['Room/Apartment Charges:', `$${roomTotal.toFixed(2)}`],
+    ['Total Shift Revenue:', formatCurrency(totalRev)],
+    ['Card Revenue:', formatCurrency(cardTotal)],
+    ['Mobile Money Revenue:', formatCurrency(momoTotal)],
+    ['Room/Apartment Charges:', formatCurrency(roomTotal)],
     ['Completed Transactions:', `${shiftOrders.length}`]
   ];
 
@@ -295,3 +296,4 @@ export function exportShiftReportPDF(shift: Shift, orders: Order[]) {
 
   doc.save(`Shift_Report_${shift.id}.pdf`);
 }
+

@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Wine, Shield, UserCheck, Clock, Moon, Sun, 
-  AlertTriangle, DollarSign, Key, LogOut, Lock 
+  AlertTriangle, DollarSign, Key, LogOut, Lock, User
 } from 'lucide-react';
-import { Shift, UserRole } from '../types';
+import { Shift, UserRole, AppUser } from '../types';
+import { formatCurrency } from '../lib/currency';
 
 interface HeaderProps {
   currentShift: Shift | null;
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
+  currentUser?: AppUser | null;
+  onLogout?: () => void;
   darkMode: boolean;
   setDarkMode: (val: boolean) => void;
   lowStockCount: number;
@@ -20,6 +23,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentShift,
   userRole,
   setUserRole,
+  currentUser,
+  onLogout,
   darkMode,
   setDarkMode,
   lowStockCount,
@@ -49,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const verifyPin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === '1234' || pinInput === '8888') {
+    if (pinInput === '1234' || pinInput === '8888' || pinInput === 'Pksquare@1') {
       setUserRole('Manager');
       setShowPinModal(false);
       setPinInput('');
@@ -63,109 +68,83 @@ export const Header: React.FC<HeaderProps> = ({
     <>
       <header className={`sticky top-0 z-30 transition-colors duration-200 border-b ${
         darkMode 
-          ? 'bg-gray-900 border-gray-800 text-white' 
-          : 'bg-white border-gray-200 text-gray-800'
+          ? 'bg-slate-900 border-slate-800 text-white' 
+          : 'bg-white border-slate-200 text-slate-800'
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             
             {/* Brand / Logo */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-white shadow-md shadow-amber-500/20">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 shadow-md shadow-amber-500/20">
                 <Wine className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h1 className="font-bold text-lg tracking-tight leading-tight">
+                  <h1 className="font-black text-lg tracking-tight leading-tight">
                     GRAND HORIZON
                   </h1>
-                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
-                    BAR & POS
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                    RWF SYSTEM
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Hotel & Resort Cashier Terminal
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  Hotel & Resort Operations
                 </p>
               </div>
             </div>
 
-            {/* Shift & Time Status */}
-            <div className="hidden md:flex items-center space-x-6">
-              
-              {/* Shift info badge */}
-              <button 
-                onClick={openShiftModal}
-                className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
-                  currentShift 
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
-                    : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-                }`}
-              >
-                <DollarSign className="w-4 h-4" />
-                <div>
-                  <div className="font-semibold text-left">
-                    {currentShift ? `Shift Open (${currentShift.cashierName})` : 'No Active Shift'}
-                  </div>
-                  <div className="text-[10px] opacity-80 text-left">
-                    {currentShift ? `Float: $${currentShift.openingCash.toFixed(2)}` : 'Click to Open Shift'}
-                  </div>
-                </div>
-              </button>
-
-              {/* Low Stock Alert Badge */}
-              {lowStockCount > 0 && (
-                <button
-                  onClick={onNavigateToStock}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 text-xs font-medium animate-pulse"
-                >
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <span>{lowStockCount} Low Stock</span>
-                </button>
-              )}
-
+            {/* Time Status & Clock */}
+            <div className="hidden md:flex items-center space-x-4">
               {/* Realtime Clock */}
-              <div className="flex items-center space-x-2 text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-lg">
-                <Clock className="w-3.5 h-3.5 text-gray-400" />
+              <div className="flex items-center space-x-2 text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
                 <span>
                   {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
               </div>
             </div>
 
-            {/* Right Controls: Role & Theme Switcher */}
+            {/* Right Controls: Role, Auth User, & Theme Switcher */}
             <div className="flex items-center space-x-3">
               
-              {/* Role Badge Button */}
-              <button
-                onClick={handleRoleToggle}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                  userRole === 'Manager'
-                    ? 'bg-purple-600 text-white border-purple-700 shadow-sm shadow-purple-500/20'
-                    : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
-                }`}
-                title={userRole === 'Cashier' ? 'Switch to Manager Mode' : 'Switch to Cashier Mode'}
-              >
-                {userRole === 'Manager' ? (
-                  <>
-                    <Shield className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Manager Mode</span>
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span>Cashier Mode</span>
-                  </>
-                )}
-              </button>
+              {currentUser && (
+                <div className="hidden lg:flex items-center space-x-2 pl-2 border-l border-slate-200 dark:border-slate-800 text-xs">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold text-xs">
+                    {currentUser.fullName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-slate-800 dark:text-slate-200 leading-tight">
+                      {currentUser.fullName}
+                    </p>
+                    <p className="text-[10px] text-amber-500 font-bold">
+                      {currentUser.role}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+
 
               {/* Theme Toggle */}
               <button
                 onClick={() => setDarkMode(!darkMode)}
-                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
+                className="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
                 title="Toggle Dark/Light Mode"
               >
                 {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
               </button>
+
+              {/* Logout Button */}
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-800 transition-all cursor-pointer"
+                  title="Logout Session"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              )}
             </div>
 
           </div>
@@ -175,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Manager PIN Security Modal */}
       {showPinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center space-x-2 text-purple-600 dark:text-purple-400">
                 <Lock className="w-5 h-5" />
@@ -183,13 +162,13 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
               <button 
                 onClick={() => setShowPinModal(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               Enter Manager PIN code to unlock override privileges, price edits, and manager settings.
             </p>
 
@@ -198,12 +177,12 @@ export const Header: React.FC<HeaderProps> = ({
                 <label className="block text-xs font-medium mb-1">Manager PIN Code</label>
                 <input
                   type="password"
-                  maxLength={6}
+                  maxLength={20}
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
                   placeholder="Enter PIN (Default: 1234)"
                   autoFocus
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-center tracking-widest text-lg font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-center tracking-widest text-lg font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
                 />
               </div>
 
@@ -217,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowPinModal(false)}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200"
                 >
                   Cancel
                 </button>
@@ -235,3 +214,4 @@ export const Header: React.FC<HeaderProps> = ({
     </>
   );
 };
+

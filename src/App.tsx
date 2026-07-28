@@ -6,14 +6,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
-  StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus 
+  StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser 
 } from './types';
 import { 
   loadMenuItems, saveMenuItems, loadTables, saveTables, 
   loadWaiters, saveWaiters, loadOrders, saveOrders, 
   loadKitchenTickets, saveKitchenTickets, loadStockLogs, saveStockLogs, 
   loadShifts, saveShifts, loadCurrentShift, saveCurrentShift, 
-  loadGuestRooms, saveGuestRooms, resetAllDataToDefault 
+  loadGuestRooms, saveGuestRooms, resetAllDataToDefault,
+  loadCurrentUser, saveCurrentUser, clearCurrentUser, addAuditLog
 } from './lib/storage';
 
 import { Header } from './components/Header';
@@ -29,9 +30,13 @@ import { DailyReportView } from './components/DailyReportView';
 import { ManagerSettings } from './components/ManagerSettings';
 import { ReceiptModal } from './components/ReceiptModal';
 import { OrderCenterList } from './components/OrderCenterList';
+import { LoginView } from './components/LoginView';
+import { UserManagement } from './components/UserManagement';
+import { AuditLogView } from './components/AuditLogView';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('Cashier');
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
@@ -49,8 +54,14 @@ export default function App() {
   // Receipt Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
 
-  // Load Initial Data from Storage
+  // Load Initial Data & Session from Storage
   useEffect(() => {
+    const loggedInUser = loadCurrentUser();
+    if (loggedInUser) {
+      setCurrentUser(loggedInUser);
+      setUserRole(loggedInUser.role === 'Super Admin' || loggedInUser.role === 'Admin' || loggedInUser.role === 'Manager' ? 'Manager' : 'Cashier');
+    }
+
     setMenuItems(loadMenuItems());
     setTables(loadTables());
     setWaiters(loadWaiters());
@@ -61,6 +72,31 @@ export default function App() {
     setCurrentShift(loadCurrentShift());
     setGuestRooms(loadGuestRooms());
   }, []);
+
+  const handleLoginSuccess = (user: AppUser) => {
+    setCurrentUser(user);
+    if (user.role === 'Super Admin' || user.role === 'Admin' || user.role === 'Manager') {
+      setUserRole('Manager');
+    } else {
+      setUserRole('Cashier');
+    }
+  };
+
+  const handleLogout = () => {
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'User Logout',
+        category: 'Auth',
+        details: 'User logged out of session'
+      });
+    }
+    clearCurrentUser();
+    setCurrentUser(null);
+  };
 
   // Sync to Storage on State Changes
   const updateMenuItemsState = (newItems: MenuItem[]) => {
@@ -205,7 +241,20 @@ export default function App() {
       updateGuestRoomsState(updatedRooms);
     }
 
-    // 6. Show Printable Thermal Receipt Modal
+    // 6. Audit Log
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'New Order Completed',
+        category: 'Sales',
+        details: `Created order #${completedOrder.id} (${completedOrder.servicesIncluded?.join(', ') || 'Bar Order'}) for ${completedOrder.total} RWF - Status: ${completedOrder.status}`
+      });
+    }
+
+    // 7. Show Printable Thermal Receipt Modal
     setReceiptOrder(completedOrder);
   };
 
@@ -218,6 +267,18 @@ export default function App() {
     if (newKot) {
       playSound('kitchen');
       updateKitchenTicketsState([newKot, ...kitchenTickets]);
+    }
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Update Order',
+        category: 'Sales',
+        details: `Updated order #${updatedOrder.id} status to ${updatedOrder.status} / Payment: ${updatedOrder.paymentStatus}`
+      });
     }
   };
 
@@ -278,11 +339,23 @@ export default function App() {
       newStock,
       reason,
       timestamp: new Date().toISOString(),
-      actor: currentShift?.cashierName || 'Bar Manager'
+      actor: currentShift?.cashierName || currentUser?.fullName || 'Bar Manager'
     };
 
     updateMenuItemsState(updatedItems);
     updateStockLogsState([newLog, ...stockLogs]);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Manual Stock Adjustment',
+        category: 'Inventory',
+        details: `Adjusted stock for ${menuItems[targetIdx].name} (${qtyChange > 0 ? '+' : ''}${qtyChange}) - Reason: ${reason}`
+      });
+    }
   };
 
   // Open New Shift
@@ -350,11 +423,16 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    if (confirm('Are you sure you want to reset all data to initial demo state?')) {
+    if (confirm('Are you sure you want to reset all data?')) {
       resetAllDataToDefault();
       window.location.reload();
     }
   };
+
+  // Unauthenticated Guard
+  if (!currentUser) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} darkMode={darkMode} />;
+  }
 
   // Pending counts
   const pendingKitchenCount = kitchenTickets.filter(k => k.status === 'Pending' || k.status === 'Preparing').length;
@@ -363,7 +441,7 @@ export default function App() {
 
   return (
     <div className={`min-h-screen transition-colors duration-200 font-sans ${
-      darkMode ? 'bg-gray-950 text-gray-100' : 'bg-gray-100 text-gray-900'
+      darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'
     }`}>
       
       {/* Top Header */}
@@ -371,6 +449,8 @@ export default function App() {
         currentShift={currentShift}
         userRole={userRole}
         setUserRole={setUserRole}
+        currentUser={currentUser}
+        onLogout={handleLogout}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         lowStockCount={lowStockCount}
@@ -409,7 +489,7 @@ export default function App() {
             waiters={waiters}
             menuItems={menuItems}
             guestRooms={guestRooms}
-            cashierName={currentShift?.cashierName || 'Cashier Direct'}
+            cashierName={currentShift?.cashierName || currentUser.fullName}
             userRole={userRole}
             darkMode={darkMode}
             onUpdateOrder={handleUpdateOrder}
@@ -489,7 +569,20 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'settings' && userRole === 'Manager' && (
+        {activeTab === 'users' && (userRole === 'Manager' || userRole === 'Super Admin') && (
+          <UserManagement
+            currentUser={currentUser}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'audit_logs' && (userRole === 'Manager' || userRole === 'Super Admin') && (
+          <AuditLogView
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'settings' && (userRole === 'Manager' || userRole === 'Super Admin') && (
           <ManagerSettings
             menuItems={menuItems}
             waiters={waiters}
@@ -514,3 +607,4 @@ export default function App() {
     </div>
   );
 }
+

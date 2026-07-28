@@ -236,4 +236,42 @@ export interface DailyReportData {
   outstandingRoomCharges: number;
 }
 
-export type UserRole = 'Cashier' | 'Manager';
+export type SystemRole = 
+  | 'Super Admin'
+  | 'Admin'
+  | 'Manager'
+  | 'Cashier'
+  | 'Kitchen'
+  | 'Storekeeper'
+  | 'Receptionist'
+  | 'Accountant'
+  | 'Housekeeping'
+  | 'Waiter';
+
+export type UserRole = SystemRole;
+
+export interface AppUser {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: SystemRole;
+  status: 'Active' | 'Inactive' | 'Suspended';
+  passwordHash: string;
+  createdAt: string;
+  lastLoginAt?: string;
+  isSuperAdmin?: boolean; // Hidden internal system marker
+}
+
+export interface AuditLog {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  userEmail: string;
+  action: string;
+  category: 'Auth' | 'User Management' | 'Inventory' | 'Sales' | 'System' | 'Reports';
+  details: string;
+  timestamp: string;
+  ipAddress?: string;
+}
