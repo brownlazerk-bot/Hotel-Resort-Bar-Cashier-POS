@@ -28,6 +28,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, dar
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [pinCode, setPinCode] = useState('');
   const [role, setRole] = useState<SystemRole>('Manager');
   const [status, setStatus] = useState<'Active' | 'Inactive' | 'Suspended'>('Active');
 
@@ -50,6 +51,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, dar
     setEmail('');
     setPhone('');
     setPassword('');
+    setPinCode('1234');
     setRole('Manager');
     setStatus('Active');
     setEditingUser(null);
@@ -65,6 +67,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, dar
     setFullName(user.fullName);
     setEmail(user.email);
     setPhone(user.phone);
+    setPinCode(user.pinCode || '1234');
     setRole(user.role);
     setStatus(user.status);
     setIsAddModalOpen(true);
@@ -91,6 +94,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, dar
             fullName: fullName.trim(),
             email: cleanEmail,
             phone: phone.trim(),
+            pinCode: pinCode.trim() || '1234',
             role,
             status
           };
@@ -128,6 +132,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, dar
         role,
         status,
         passwordHash: password.trim(),
+        pinCode: pinCode.trim() || '1234',
         createdAt: new Date().toISOString()
       };
 
@@ -498,6 +503,20 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, dar
                   />
                 </div>
               )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  4-Digit POS PIN Code (For Quick Terminal Login)
+                </label>
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={pinCode}
+                  onChange={(e) => setPinCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder="e.g. 1234"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold tracking-widest text-slate-900 dark:text-white"
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

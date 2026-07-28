@@ -59,12 +59,16 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const categories: string[] = [
     'All', 'Beers', 'Soft Drinks', 'Wines', 'Whisky', 
     'Cocktails', 'Juices', 'Water', 'Coffee', 'Tea', 
-    'Food', 'Pool Services', 'Sauna Services'
+    'Food', 'Pool Services', 'Sauna Services',
+    'Room Services', 'Apartment Services', 'Other Services'
   ];
 
   // Filtered menu items
   const filteredItems = menuItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    if (item.active === false) return false;
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (item.code && item.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (item.barcode && item.barcode.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCat = selectedCategory === 'All' || item.category === selectedCategory;
     return matchesSearch && matchesCat;
   });

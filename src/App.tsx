@@ -6,7 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
-  StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser 
+  StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser,
+  Expense, CashMovement, DailyClosingRecord
 } from './types';
 import { 
   loadMenuItems, saveMenuItems, loadTables, saveTables, 
@@ -14,7 +15,10 @@ import {
   loadKitchenTickets, saveKitchenTickets, loadStockLogs, saveStockLogs, 
   loadShifts, saveShifts, loadCurrentShift, saveCurrentShift, 
   loadGuestRooms, saveGuestRooms, resetAllDataToDefault,
-  loadCurrentUser, saveCurrentUser, clearCurrentUser, addAuditLog
+  loadCurrentUser, saveCurrentUser, clearCurrentUser, addAuditLog,
+  loadExpenses, saveExpenses, addExpense,
+  loadCashMovements, saveCashMovements, addCashMovement,
+  loadDailyClosings, saveDailyClosings, addDailyClosing
 } from './lib/storage';
 
 import { Header } from './components/Header';
@@ -33,6 +37,7 @@ import { OrderCenterList } from './components/OrderCenterList';
 import { LoginView } from './components/LoginView';
 import { UserManagement } from './components/UserManagement';
 import { AuditLogView } from './components/AuditLogView';
+import { ProductServiceManager } from './components/ProductServiceManager';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
@@ -50,6 +55,9 @@ export default function App() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [guestRooms, setGuestRooms] = useState<GuestRoom[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [dailyClosings, setDailyClosings] = useState<DailyClosingRecord[]>([]);
 
   // Receipt Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
@@ -71,6 +79,9 @@ export default function App() {
     setShifts(loadShifts());
     setCurrentShift(loadCurrentShift());
     setGuestRooms(loadGuestRooms());
+    setExpenses(loadExpenses());
+    setCashMovements(loadCashMovements());
+    setDailyClosings(loadDailyClosings());
   }, []);
 
   const handleLoginSuccess = (user: AppUser) => {
@@ -142,6 +153,44 @@ export default function App() {
   const updateGuestRoomsState = (newRooms: GuestRoom[]) => {
     setGuestRooms(newRooms);
     saveGuestRooms(newRooms);
+  };
+
+  const updateExpensesState = (newExpenses: Expense[]) => {
+    setExpenses(newExpenses);
+    saveExpenses(newExpenses);
+  };
+
+  const handleAddExpense = (exp: Omit<Expense, 'id' | 'expenseNumber' | 'timestamp'>) => {
+    const created = addExpense(exp);
+    setExpenses(loadExpenses());
+    
+    // Also record cash movement if expense was paid in cash
+    addCashMovement({
+      amount: -Math.abs(exp.amount),
+      movementType: 'Expense Paid',
+      reason: `Expense [${exp.category}]: ${exp.description}`,
+      user: exp.approvedBy || exp.requestedBy || 'Staff',
+      shiftId: currentShift?.id,
+      referenceId: created.id
+    });
+    setCashMovements(loadCashMovements());
+    return created;
+  };
+
+  const updateCashMovementsState = (newMovements: CashMovement[]) => {
+    setCashMovements(newMovements);
+    saveCashMovements(newMovements);
+  };
+
+  const handleAddCashMovement = (mov: Omit<CashMovement, 'id' | 'timestamp' | 'date' | 'time'>) => {
+    const created = addCashMovement(mov);
+    setCashMovements(loadCashMovements());
+    return created;
+  };
+
+  const updateDailyClosingsState = (newClosings: DailyClosingRecord[]) => {
+    setDailyClosings(newClosings);
+    saveDailyClosings(newClosings);
   };
 
   // Play audio chime feedback
@@ -371,14 +420,30 @@ export default function App() {
 
     updateCurrentShiftState(newShift);
     updateShiftsState([newShift, ...shifts]);
+
+    // Record Opening Cash Movement
+    addCashMovement({
+      amount: openingCash,
+      movementType: 'Opening Cash',
+      reason: `Shift Opened with Float RWF ${openingCash.toLocaleString()}`,
+      user: cashierName,
+      shiftId: newShift.id,
+      referenceId: newShift.id
+    });
+    setCashMovements(loadCashMovements());
   };
 
   // Close Active Shift
   const handleCloseShift = (actualCash: number, notes?: string) => {
     if (!currentShift) return;
 
-    const shiftOrders = orders.filter(o => o.shiftId === currentShift.id && o.status === 'Paid');
-    const cashCollected = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cashPaid || 0) - (o.paymentDetails?.changeGiven || 0), 0);
+    const shiftOrders = orders.filter(o => o.shiftId === currentShift.id);
+    const paidShiftOrders = shiftOrders.filter(o => o.status === 'Paid');
+    const cashCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cashPaid || 0) - (o.paymentDetails?.changeGiven || 0), 0);
+    const cardCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cardPaid || 0), 0);
+    const momoCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.mobileMoneyPaid || 0), 0);
+    const creditSalesTotal = shiftOrders.filter(o => o.paymentStatus === 'CREDIT').reduce((sum, o) => sum + (o.balance > 0 ? o.balance : o.total), 0);
+    
     const expectedCash = currentShift.openingCash + cashCollected;
     const diff = actualCash - expectedCash;
 
@@ -395,6 +460,40 @@ export default function App() {
     const updatedAllShifts = shifts.map(s => s.id === closedShift.id ? closedShift : s);
     updateShiftsState(updatedAllShifts);
     updateCurrentShiftState(null);
+
+    // Record Closing Cash Movement
+    addCashMovement({
+      amount: actualCash,
+      movementType: 'Closing Cash',
+      reason: `Shift Closed - Drawer Cash RWF ${actualCash.toLocaleString()}`,
+      user: currentShift.cashierName,
+      shiftId: currentShift.id,
+      referenceId: currentShift.id
+    });
+    setCashMovements(loadCashMovements());
+
+    // Record Daily Closing Reconciliation Record
+    addDailyClosing({
+      date: new Date().toISOString().split('T')[0],
+      closedBy: currentShift.cashierName,
+      shiftId: currentShift.id,
+      openingCash: currentShift.openingCash,
+      cashSales: cashCollected,
+      cardSales: cardCollected,
+      mobileMoneySales: momoCollected,
+      creditSales: creditSalesTotal,
+      expensesTotal: expenses.reduce((s, e) => s + e.amount, 0),
+      creditCollectedTotal: 0,
+      outstandingCredit: creditSalesTotal,
+      cashDeposited: actualCash,
+      expectedCash,
+      actualCash,
+      difference: diff,
+      differenceReason: notes || (diff === 0 ? 'Balanced' : `Discrepancy of RWF ${diff}`),
+      approvedBy: currentUser?.fullName || 'Manager',
+      varianceStatus: diff === 0 ? 'Approved' : 'Pending Review'
+    });
+    setDailyClosings(loadDailyClosings());
   };
 
   // Manager Actions
@@ -565,6 +664,25 @@ export default function App() {
             orders={orders}
             menuItems={menuItems}
             currentShift={currentShift}
+            allShifts={shifts}
+            guestRooms={guestRooms}
+            expenses={expenses}
+            cashMovements={cashMovements}
+            dailyClosings={dailyClosings}
+            currentUser={currentUser}
+            onAddExpense={handleAddExpense}
+            onAddCashMovement={handleAddCashMovement}
+            onUpdateOrder={handleUpdateOrder}
+            onUpdateDailyClosing={(updatedClosings) => updateDailyClosingsState(updatedClosings)}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'products_services' && (userRole === 'Manager' || userRole === 'Super Admin') && (
+          <ProductServiceManager
+            menuItems={menuItems}
+            onSaveMenuItem={handleSaveMenuItem}
+            onDeleteMenuItem={handleDeleteMenuItem}
             darkMode={darkMode}
           />
         )}

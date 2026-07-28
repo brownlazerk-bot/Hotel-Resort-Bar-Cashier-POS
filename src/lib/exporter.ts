@@ -297,3 +297,63 @@ export function exportShiftReportPDF(shift: Shift, orders: Order[]) {
   doc.save(`Shift_Report_${shift.id}.pdf`);
 }
 
+export function exportGenericExcel(filename: string, sheetName: string, headers: string[], rows: (string | number)[][]) {
+  const wb = XLSX.utils.book_new();
+  const data = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
+export function exportGenericPDF(title: string, subtitle: string, headers: string[], rows: (string | number)[][], filename: string) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('GRAND HORIZON HOTEL & RESORT', 14, 15);
+  
+  doc.setFontSize(12);
+  doc.text(title.toUpperCase(), 14, 22);
+  
+  doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`${subtitle} | Date: ${new Date().toLocaleDateString()}`, 14, 28);
+  
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(200, 200, 200);
+  doc.line(14, 31, 283, 31);
+
+  let y = 37;
+  const colWidth = Math.floor(269 / Math.max(1, headers.length));
+
+  // Table Header
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  headers.forEach((h, idx) => {
+    doc.text(h, 14 + (idx * colWidth), y);
+  });
+  
+  y += 3;
+  doc.line(14, y, 283, y);
+  y += 5;
+
+  // Rows
+  doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(7.5);
+  
+  rows.forEach((row) => {
+    if (y > 190) {
+      doc.addPage();
+      y = 20;
+    }
+    row.forEach((cell, idx) => {
+      const text = String(cell ?? '');
+      doc.text(text.length > 26 ? text.substring(0, 24) + '...' : text, 14 + (idx * colWidth), y);
+    });
+    y += 5;
+  });
+
+  doc.save(`${filename}.pdf`);
+}
+

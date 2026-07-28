@@ -12,20 +12,40 @@ export type Category =
   | 'Pool Services'
   | 'Sauna Services'
   | 'Room Services'
-  | 'Apartment Services';
+  | 'Apartment Services'
+  | 'Other Services';
+
+export type ProductSection = 
+  | 'Bar Menu' 
+  | 'Kitchen Menu' 
+  | 'Swimming Pool' 
+  | 'Sauna' 
+  | 'Room Services' 
+  | 'Apartment Services' 
+  | 'Other Services';
 
 export type ItemStatus = 'Available' | 'Out of Stock';
 
 export interface MenuItem {
   id: string;
+  code?: string;
+  barcode?: string;
   name: string;
   category: Category;
-  price: number;
+  productSection?: ProductSection;
+  foodCategory?: string;
+  price: number; // Selling price (RWF)
+  costPrice?: number; // Cost price (RWF)
+  tax?: number; // Tax percentage e.g. 18% or 0%
   stockQuantity: number;
-  unit: string; // e.g. 'Bottle', 'Glass', 'Serving', 'Ticket', 'Cup', 'Shot', 'Portion'
+  unit: string; // e.g. 'Bottle', 'Glass', 'Serving', 'Ticket', 'Cup', 'Shot', 'Portion', 'Pass', 'Hour', 'Service'
   status: ItemStatus;
+  active?: boolean;
   image?: string;
   isFood?: boolean;
+  prepTime?: string;
+  linkedKitchenItem?: string;
+  description?: string;
   minStockAlert?: number;
 }
 
@@ -234,6 +254,93 @@ export interface DailyReportData {
   mobileMoneyCollected: number;
   creditCollected: number;
   outstandingRoomCharges: number;
+  
+  // Expenses & Cash Ledger additions
+  totalExpenses?: number;
+  netRevenueAfterExpenses?: number;
+}
+
+export type ExpenseDepartment = 'Bar' | 'Kitchen' | 'Pool & Sauna' | 'Rooms' | 'Maintenance' | 'Administration' | 'General';
+
+export interface Expense {
+  id: string; // e.g. "EXP-1001"
+  expenseNumber: string;
+  date: string; // YYYY-MM-DD
+  timestamp: string; // ISO
+  department: ExpenseDepartment;
+  category: string; // e.g. "Purchased Meat", "Purchased Vegetables", "Purchased Drinks", "Generator Fuel", "Electricity", "Water", "Internet", "Repairs", "Staff Lunch", "Transport", "Cleaning Materials"
+  description: string;
+  requestedBy: string;
+  approvedBy: string;
+  amount: number;
+  reason: string;
+  attachmentName?: string;
+  shiftId?: string;
+}
+
+export type CashMovementType = 
+  | 'Opening Cash' 
+  | 'Sales Income' 
+  | 'Credit Payment Received' 
+  | 'Expense Paid' 
+  | 'Refund' 
+  | 'Closing Cash'
+  | 'Manual Adjustment';
+
+export interface CashMovement {
+  id: string; // e.g. "CSH-5001"
+  timestamp: string; // ISO
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm:ss
+  amount: number; // positive for cash in, negative for cash out
+  movementType: CashMovementType;
+  reason: string;
+  user: string;
+  shiftId?: string;
+  referenceId?: string; // Order ID, Expense ID, or Shift ID
+}
+
+export interface DailyClosingRecord {
+  id: string; // e.g. "DCR-1001"
+  date: string; // YYYY-MM-DD
+  closedAt: string; // ISO
+  closedBy: string; // Cashier / Manager
+  shiftId: string;
+  openingCash: number;
+  cashSales: number;
+  cardSales: number;
+  mobileMoneySales: number;
+  creditSales: number;
+  expensesTotal: number;
+  creditCollectedTotal: number;
+  outstandingCredit: number;
+  cashDeposited: number;
+  expectedCash: number;
+  actualCash: number;
+  difference: number;
+  differenceReason?: string;
+  approvedBy: string;
+  varianceStatus: 'Approved' | 'Pending Review' | 'Rejected';
+}
+
+export interface CreditReportItem {
+  id: string;
+  orderId: string;
+  receiptNumber: string;
+  customerName: string;
+  customerPhone: string;
+  transactionDate: string; // ISO or YYYY-MM-DD
+  dueDate?: string;
+  totalBill: number;
+  amountPaid: number;
+  outstandingBalance: number;
+  status: 'Outstanding' | 'Partially Paid' | 'Fully Paid';
+  waiterName?: string;
+  cashierName?: string;
+  department?: string;
+  description?: string;
+  paymentMethod?: PaymentMethod;
+  paymentHistory?: PaymentTransaction[];
 }
 
 export type SystemRole = 
@@ -258,6 +365,7 @@ export interface AppUser {
   role: SystemRole;
   status: 'Active' | 'Inactive' | 'Suspended';
   passwordHash: string;
+  pinCode?: string; // 4-digit quick PIN for POS terminal login
   createdAt: string;
   lastLoginAt?: string;
   isSuperAdmin?: boolean; // Hidden internal system marker

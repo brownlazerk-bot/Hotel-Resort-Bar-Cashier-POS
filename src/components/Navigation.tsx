@@ -1,7 +1,8 @@
 import React from 'react';
 import { 
   LayoutDashboard, Receipt, ShoppingCart, UtensilsCrossed, ChefHat, 
-  Waves, PackageCheck, ReceiptText, FileBarChart, Settings, Users, ShieldCheck
+  Waves, PackageCheck, ReceiptText, FileBarChart, Settings, Users, ShieldCheck,
+  Package
 } from 'lucide-react';
 import { UserRole } from '../types';
 
@@ -15,6 +16,7 @@ export type TabType =
   | 'stock' 
   | 'shifts' 
   | 'report' 
+  | 'products_services'
   | 'users'
   | 'audit_logs'
   | 'settings';
@@ -68,6 +70,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     { id: 'shifts' as TabType, label: 'Shift Register', icon: ReceiptText },
     { id: 'report' as TabType, label: 'Daily Report', icon: FileBarChart },
+    { id: 'products_services' as TabType, label: 'Products & Services', icon: Package, managerOnly: true },
     { id: 'users' as TabType, label: 'User Admin', icon: Users, managerOnly: true },
     { id: 'audit_logs' as TabType, label: 'Audit Logs', icon: ShieldCheck, managerOnly: true },
     { id: 'settings' as TabType, label: 'Staff & Menu', icon: Settings, managerOnly: true },
