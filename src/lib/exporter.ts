@@ -1,0 +1,297 @@
+import { jsPDF } from 'jspdf';
+import * as XLSX from 'xlsx';
+import { DailyReportData, Order, Shift } from '../types';
+
+export function printReportHTML(title: string, htmlContent: string) {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Please allow popups to print reports.');
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            color: #1f2937;
+            background-color: #ffffff;
+          }
+          h1, h2, h3 { color: #111827; margin-bottom: 8px; }
+          .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px; }
+          .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; background: #f3f4f6; }
+          .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
+          .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; background: #fafafa; }
+          .card-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-weight: bold; }
+          .card-value { font-size: 20px; font-weight: bold; color: #111827; margin-top: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 12px; margin-bottom: 20px; font-size: 13px; }
+          th { background: #f3f4f6; text-align: left; padding: 8px 12px; border-bottom: 2px solid #e5e7eb; font-weight: 600; }
+          td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; }
+          .text-right { text-align: right; }
+          .total-row { font-weight: bold; background: #f9fafb; font-size: 14px; }
+          .footer { text-align: center; margin-top: 30px; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+          @media print {
+            body { margin: 0; }
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        ${htmlContent}
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+export function exportDailyReportPDF(report: DailyReportData) {
+  const doc = new jsPDF();
+
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('GRAND HORIZON HOTEL & RESORT', 14, 18);
+  
+  doc.setFontSize(14);
+  doc.setFont('Helvetica', 'normal');
+  doc.text('DAILY BAR & CASHIER FINANCIAL REPORT', 14, 26);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Report Date: ${report.date}  |  Generated At: ${new Date(report.generatedAt).toLocaleString()}`, 14, 33);
+  doc.text(`Cashier-in-Charge: ${report.cashierName}`, 14, 39);
+
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(200, 200, 200);
+  doc.line(14, 43, 196, 43);
+
+  let y = 50;
+
+  // Financial Summary
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text('1. EXECUTIVE FINANCIAL SUMMARY', 14, y);
+  y += 6;
+
+  doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(10);
+  const metrics = [
+    ['Gross Revenue:', `$${report.grossRevenue.toFixed(2)}`, 'Total Transactions:', `${report.totalTransactions}`],
+    ['Taxes (VAT):', `$${report.taxes.toFixed(2)}`, 'Discounts Applied:', `$${report.discounts.toFixed(2)}`],
+    ['NET REVENUE:', `$${report.netRevenue.toFixed(2)}`, 'Cash Collected:', `$${report.cashCollected.toFixed(2)}`],
+    ['Card Collected:', `$${report.cardCollected.toFixed(2)}`, 'Mobile Money:', `$${report.mobileMoneyCollected.toFixed(2)}`],
+    ['Room/Apt Charges:', `$${report.outstandingRoomCharges.toFixed(2)}`, 'Current Stock Value:', `$${report.currentStockValue.toFixed(2)}`],
+  ];
+
+  metrics.forEach(([lbl1, val1, lbl2, val2]) => {
+    doc.text(lbl1, 14, y);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(val1, 55, y);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.text(lbl2, 110, y);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(val2, 160, y);
+
+    doc.setFont('Helvetica', 'normal');
+    y += 6;
+  });
+
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 8;
+
+  // Departmental Revenues
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('2. DEPARTMENTAL REVENUE BREAKDOWN', 14, y);
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.setFont('Helvetica', 'normal');
+  const deptBreakdown = [
+    ['Bar (Drink Sales):', `$${report.totalDrinkSales.toFixed(2)} (${report.drinksSoldQty} units)`],
+    ['Restaurant (Food Orders):', `$${report.foodRevenue.toFixed(2)} (${report.totalFoodOrders} orders)`],
+    ['Swimming Pool Passes:', `$${report.poolRevenue.toFixed(2)} (${report.poolVisitorsCount} passes)`],
+    ['Sauna & Steam Sessions:', `$${report.saunaRevenue.toFixed(2)} (${report.saunaVisitorsCount} sessions)`],
+    ['Hotel Guest Room Charges:', `$${report.roomRevenue.toFixed(2)}`],
+    ['Apartment Suite Charges:', `$${report.apartmentRevenue.toFixed(2)}`],
+  ];
+
+  deptBreakdown.forEach(([dept, amount]) => {
+    doc.text(dept, 14, y);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(amount, 90, y);
+    doc.setFont('Helvetica', 'normal');
+    y += 6;
+  });
+
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 8;
+
+  // Best Selling Drinks
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('3. TOP SELLING DRINKS', 14, y);
+  y += 6;
+
+  doc.setFontSize(9);
+  doc.setFont('Helvetica', 'bold');
+  doc.text('Item Name', 14, y);
+  doc.text('Qty Sold', 120, y);
+  doc.text('Total Revenue', 160, y);
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 5;
+
+  doc.setFont('Helvetica', 'normal');
+  if (report.bestSellingDrinks.length === 0) {
+    doc.text('No drink sales recorded for this date.', 14, y);
+    y += 6;
+  } else {
+    report.bestSellingDrinks.forEach((item) => {
+      doc.text(item.name, 14, y);
+      doc.text(`${item.qty}`, 120, y);
+      doc.text(`$${item.revenue.toFixed(2)}`, 160, y);
+      y += 5;
+    });
+  }
+
+  y += 10;
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
+  doc.text('*** Official Hotel System Generated Financial Record - No Manual Signature Required ***', 14, y);
+
+  doc.save(`Daily_Report_Bar_${report.date}.pdf`);
+}
+
+export function exportDailyReportExcel(report: DailyReportData) {
+  const wb = XLSX.utils.book_new();
+
+  // Summary Sheet
+  const summaryData = [
+    ['GRAND HORIZON HOTEL & RESORT'],
+    ['DAILY BAR & CASHIER FINANCIAL REPORT'],
+    [`Report Date`, report.date],
+    [`Generated At`, new Date(report.generatedAt).toLocaleString()],
+    [`Cashier Name`, report.cashierName],
+    [],
+    ['FINANCIAL SUMMARY METRIC', 'VALUE ($)'],
+    ['Gross Revenue', report.grossRevenue],
+    ['Taxes (VAT 18%)', report.taxes],
+    ['Discounts Applied', report.discounts],
+    ['NET REVENUE', report.netRevenue],
+    [],
+    ['PAYMENT METHOD BREAKDOWN', 'COLLECTED AMOUNT ($)'],
+    ['Cash Collected', report.cashCollected],
+    ['Card Payment', report.cardCollected],
+    ['Mobile Money (MoMo)', report.mobileMoneyCollected],
+    ['Room & Apartment Charges', report.outstandingRoomCharges],
+    [],
+    ['DEPARTMENTAL REVENUES', 'REVENUE ($)', 'VOLUME'],
+    ['Bar (Drink Sales)', report.totalDrinkSales, `${report.drinksSoldQty} units`],
+    ['Restaurant (Food Orders)', report.foodRevenue, `${report.totalFoodOrders} orders`],
+    ['Swimming Pool', report.poolRevenue, `${report.poolVisitorsCount} passes`],
+    ['Sauna & Steam', report.saunaRevenue, `${report.saunaVisitorsCount} sessions`],
+    ['Room Charges', report.roomRevenue, '-'],
+    ['Apartment Charges', report.apartmentRevenue, '-'],
+  ];
+
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Daily Summary');
+
+  // Bestsellers Sheet
+  const bestData = [
+    ['TOP SELLING DRINKS'],
+    ['Drink Name', 'Quantity Sold', 'Total Revenue ($)'],
+    ...report.bestSellingDrinks.map(b => [b.name, b.qty, b.revenue])
+  ];
+  const wsBest = XLSX.utils.aoa_to_sheet(bestData);
+  XLSX.utils.book_append_sheet(wb, wsBest, 'Top Drinks');
+
+  XLSX.writeFile(wb, `Daily_Report_Bar_${report.date}.xlsx`);
+}
+
+export function exportShiftReportPDF(shift: Shift, orders: Order[]) {
+  const doc = new jsPDF();
+  const shiftOrders = orders.filter(o => o.shiftId === shift.id && o.status === 'Paid');
+
+  const totalRev = shiftOrders.reduce((sum, o) => sum + o.total, 0);
+  const cashTotal = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cashPaid || 0) - (o.paymentDetails?.changeGiven || 0), 0);
+  const cardTotal = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cardPaid || 0), 0);
+  const momoTotal = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.mobileMoneyPaid || 0), 0);
+  const roomTotal = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.roomChargeAmount || 0), 0);
+
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('CASHIER SHIFT RECONCILIATION REPORT', 14, 18);
+
+  doc.setFontSize(10);
+  doc.setFont('Helvetica', 'normal');
+  doc.text(`Shift ID: ${shift.id}  |  Cashier: ${shift.cashierName}`, 14, 26);
+  doc.text(`Opened: ${new Date(shift.openedAt).toLocaleString()}`, 14, 32);
+  if (shift.closedAt) {
+    doc.text(`Closed: ${new Date(shift.closedAt).toLocaleString()}`, 14, 38);
+  }
+
+  doc.line(14, 42, 196, 42);
+
+  let y = 50;
+  doc.setFont('Helvetica', 'bold');
+  doc.text('CASH DRAWER RECONCILIATION', 14, y);
+  y += 6;
+
+  doc.setFont('Helvetica', 'normal');
+  const cashRows = [
+    ['Opening Cash Float:', `$${shift.openingCash.toFixed(2)}`],
+    ['Cash Sales Collected:', `$${cashTotal.toFixed(2)}`],
+    ['Expected Cash in Drawer:', `$${(shift.openingCash + cashTotal).toFixed(2)}`],
+    ['Actual Cash Counted:', shift.closingCashActual !== undefined ? `$${shift.closingCashActual.toFixed(2)}` : 'Shift Still Open'],
+    ['Discrepancy (Over/Short):', shift.difference !== undefined ? `$${shift.difference.toFixed(2)}` : 'N/A'],
+  ];
+
+  cashRows.forEach(([lbl, val]) => {
+    doc.text(lbl, 14, y);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(val, 80, y);
+    doc.setFont('Helvetica', 'normal');
+    y += 6;
+  });
+
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 8;
+
+  doc.setFont('Helvetica', 'bold');
+  doc.text('SHIFT REVENUE SUMMARY', 14, y);
+  y += 6;
+
+  doc.setFont('Helvetica', 'normal');
+  const revRows = [
+    ['Total Shift Revenue:', `$${totalRev.toFixed(2)}`],
+    ['Card Revenue:', `$${cardTotal.toFixed(2)}`],
+    ['Mobile Money Revenue:', `$${momoTotal.toFixed(2)}`],
+    ['Room/Apartment Charges:', `$${roomTotal.toFixed(2)}`],
+    ['Completed Transactions:', `${shiftOrders.length}`]
+  ];
+
+  revRows.forEach(([lbl, val]) => {
+    doc.text(lbl, 14, y);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(val, 80, y);
+    doc.setFont('Helvetica', 'normal');
+    y += 6;
+  });
+
+  doc.save(`Shift_Report_${shift.id}.pdf`);
+}

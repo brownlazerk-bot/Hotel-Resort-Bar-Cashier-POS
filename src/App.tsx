@@ -1,0 +1,516 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { 
+  MenuItem, Table, Waiter, Order, KitchenTicket, 
+  StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus 
+} from './types';
+import { 
+  loadMenuItems, saveMenuItems, loadTables, saveTables, 
+  loadWaiters, saveWaiters, loadOrders, saveOrders, 
+  loadKitchenTickets, saveKitchenTickets, loadStockLogs, saveStockLogs, 
+  loadShifts, saveShifts, loadCurrentShift, saveCurrentShift, 
+  loadGuestRooms, saveGuestRooms, resetAllDataToDefault 
+} from './lib/storage';
+
+import { Header } from './components/Header';
+import { Navigation, TabType } from './components/Navigation';
+import { Dashboard } from './components/Dashboard';
+import { PosTerminal } from './components/PosTerminal';
+import { TablesGrid } from './components/TablesGrid';
+import { KitchenTickets } from './components/KitchenTickets';
+import { PoolSaunaModule } from './components/PoolSaunaModule';
+import { StockManagement } from './components/StockManagement';
+import { ShiftManager } from './components/ShiftManager';
+import { DailyReportView } from './components/DailyReportView';
+import { ManagerSettings } from './components/ManagerSettings';
+import { ReceiptModal } from './components/ReceiptModal';
+import { OrderCenterList } from './components/OrderCenterList';
+
+export default function App() {
+  const [darkMode, setDarkMode] = useState<boolean>(true);
+  const [userRole, setUserRole] = useState<UserRole>('Cashier');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+
+  // Core Data States
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [waiters, setWaiters] = useState<Waiter[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [kitchenTickets, setKitchenTickets] = useState<KitchenTicket[]>([]);
+  const [stockLogs, setStockLogs] = useState<StockAdjustmentLog[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+  const [guestRooms, setGuestRooms] = useState<GuestRoom[]>([]);
+
+  // Receipt Modal State
+  const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
+
+  // Load Initial Data from Storage
+  useEffect(() => {
+    setMenuItems(loadMenuItems());
+    setTables(loadTables());
+    setWaiters(loadWaiters());
+    setOrders(loadOrders());
+    setKitchenTickets(loadKitchenTickets());
+    setStockLogs(loadStockLogs());
+    setShifts(loadShifts());
+    setCurrentShift(loadCurrentShift());
+    setGuestRooms(loadGuestRooms());
+  }, []);
+
+  // Sync to Storage on State Changes
+  const updateMenuItemsState = (newItems: MenuItem[]) => {
+    setMenuItems(newItems);
+    saveMenuItems(newItems);
+  };
+
+  const updateTablesState = (newTables: Table[]) => {
+    setTables(newTables);
+    saveTables(newTables);
+  };
+
+  const updateWaitersState = (newWaiters: Waiter[]) => {
+    setWaiters(newWaiters);
+    saveWaiters(newWaiters);
+  };
+
+  const updateOrdersState = (newOrders: Order[]) => {
+    setOrders(newOrders);
+    saveOrders(newOrders);
+  };
+
+  const updateKitchenTicketsState = (newTickets: KitchenTicket[]) => {
+    setKitchenTickets(newTickets);
+    saveKitchenTickets(newTickets);
+  };
+
+  const updateStockLogsState = (newLogs: StockAdjustmentLog[]) => {
+    setStockLogs(newLogs);
+    saveStockLogs(newLogs);
+  };
+
+  const updateShiftsState = (newShifts: Shift[]) => {
+    setShifts(newShifts);
+    saveShifts(newShifts);
+  };
+
+  const updateCurrentShiftState = (shift: Shift | null) => {
+    setCurrentShift(shift);
+    saveCurrentShift(shift);
+  };
+
+  const updateGuestRoomsState = (newRooms: GuestRoom[]) => {
+    setGuestRooms(newRooms);
+    saveGuestRooms(newRooms);
+  };
+
+  // Play audio chime feedback
+  const playSound = (type: 'order' | 'kitchen') => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type === 'order' ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(type === 'order' ? 880 : 587.33, ctx.currentTime);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    } catch (e) {
+      // Audio fallback
+    }
+  };
+
+  // Handle Order Completion from POS or Pool/Sauna
+  const handleOrderCompleted = (completedOrder: Order, newKot?: KitchenTicket) => {
+    playSound('order');
+
+    // 1. Add Order
+    const updatedOrders = [completedOrder, ...orders];
+    updateOrdersState(updatedOrders);
+
+    // 2. Automatic Drink Stock Deduction
+    let updatedMenuItems = [...menuItems];
+    let newLogs: StockAdjustmentLog[] = [...stockLogs];
+
+    completedOrder.items.forEach((item) => {
+      const targetIndex = updatedMenuItems.findIndex(m => m.id === item.itemId);
+      if (targetIndex > -1) {
+        const prevStock = updatedMenuItems[targetIndex].stockQuantity;
+        const newStock = Math.max(0, prevStock - item.quantity);
+        const isNowOut = newStock === 0;
+
+        updatedMenuItems[targetIndex] = {
+          ...updatedMenuItems[targetIndex],
+          stockQuantity: newStock,
+          status: isNowOut ? 'Out of Stock' : updatedMenuItems[targetIndex].status
+        };
+
+        newLogs.unshift({
+          id: `log-${Date.now()}-${Math.random()}`,
+          itemId: item.itemId,
+          itemName: item.name,
+          type: 'Sale',
+          quantityChange: -item.quantity,
+          previousStock: prevStock,
+          newStock: newStock,
+          reason: `Auto-deducted from Order ${completedOrder.id}`,
+          timestamp: new Date().toISOString(),
+          actor: completedOrder.cashierName
+        });
+      }
+    });
+
+    updateMenuItemsState(updatedMenuItems);
+    updateStockLogsState(newLogs);
+
+    // 3. Automatic Kitchen Order Ticket (Bon de Commande) handling
+    if (newKot) {
+      playSound('kitchen');
+      updateKitchenTicketsState([newKot, ...kitchenTickets]);
+    }
+
+    // 4. Update Table Status if table was assigned
+    if (completedOrder.tableId) {
+      const updatedTables = tables.map(t => {
+        if (t.id === completedOrder.tableId) {
+          return {
+            ...t,
+            status: 'Occupied' as TableStatus,
+            currentOrderId: completedOrder.id
+          };
+        }
+        return t;
+      });
+      updateTablesState(updatedTables);
+    }
+
+    // 5. Update Guest Room Balance if Room/Apartment Charge
+    if (completedOrder.paymentDetails?.selectedRoomId) {
+      const updatedRooms = guestRooms.map(r => {
+        if (r.id === completedOrder.paymentDetails?.selectedRoomId) {
+          return {
+            ...r,
+            balance: r.balance + completedOrder.total
+          };
+        }
+        return r;
+      });
+      updateGuestRoomsState(updatedRooms);
+    }
+
+    // 6. Show Printable Thermal Receipt Modal
+    setReceiptOrder(completedOrder);
+  };
+
+  // Handle Updating Existing Order (Payments, Added Items, Status Changes)
+  const handleUpdateOrder = (updatedOrder: Order, newKot?: KitchenTicket) => {
+    playSound('order');
+    const updatedOrders = orders.map(o => o.id === updatedOrder.id ? updatedOrder : o);
+    updateOrdersState(updatedOrders);
+
+    if (newKot) {
+      playSound('kitchen');
+      updateKitchenTicketsState([newKot, ...kitchenTickets]);
+    }
+  };
+
+  // Kitchen Ticket Status Updates
+  const handleUpdateKitchenStatus = (ticketId: string, newStatus: KitchenTicketStatus) => {
+    const updated = kitchenTickets.map(t => t.id === ticketId ? { ...t, status: newStatus } : t);
+    updateKitchenTicketsState(updated);
+  };
+
+  // Table Status Update
+  const handleUpdateTableStatus = (tableId: string, newStatus: TableStatus, waiterId?: string) => {
+    const updated = tables.map(t => {
+      if (t.id === tableId) {
+        return {
+          ...t,
+          status: newStatus,
+          assignedWaiterId: waiterId || t.assignedWaiterId,
+          currentOrderId: newStatus === 'Available' ? undefined : t.currentOrderId
+        };
+      }
+      return t;
+    });
+    updateTablesState(updated);
+  };
+
+  // Open Table Order in POS
+  const handleOpenTableOrder = (table: Table) => {
+    setActiveTab('pos');
+  };
+
+  // Stock Adjustment Manual Action
+  const handleUpdateStock = (
+    itemId: string, 
+    qtyChange: number, 
+    type: StockAdjustmentLog['type'], 
+    reason: string
+  ) => {
+    const targetIdx = menuItems.findIndex(m => m.id === itemId);
+    if (targetIdx === -1) return;
+
+    const prevStock = menuItems[targetIdx].stockQuantity;
+    const newStock = Math.max(0, prevStock + qtyChange);
+
+    const updatedItems = [...menuItems];
+    updatedItems[targetIdx] = {
+      ...updatedItems[targetIdx],
+      stockQuantity: newStock,
+      status: newStock > 0 ? 'Available' : 'Out of Stock'
+    };
+
+    const newLog: StockAdjustmentLog = {
+      id: `log-${Date.now()}`,
+      itemId,
+      itemName: menuItems[targetIdx].name,
+      type,
+      quantityChange: qtyChange,
+      previousStock: prevStock,
+      newStock,
+      reason,
+      timestamp: new Date().toISOString(),
+      actor: currentShift?.cashierName || 'Bar Manager'
+    };
+
+    updateMenuItemsState(updatedItems);
+    updateStockLogsState([newLog, ...stockLogs]);
+  };
+
+  // Open New Shift
+  const handleOpenShift = (cashierName: string, openingCash: number) => {
+    const newShift: Shift = {
+      id: `sh-${Math.floor(500 + Math.random() * 500)}`,
+      cashierName,
+      cashierId: `c-${Date.now()}`,
+      openedAt: new Date().toISOString(),
+      openingCash,
+      status: 'Open'
+    };
+
+    updateCurrentShiftState(newShift);
+    updateShiftsState([newShift, ...shifts]);
+  };
+
+  // Close Active Shift
+  const handleCloseShift = (actualCash: number, notes?: string) => {
+    if (!currentShift) return;
+
+    const shiftOrders = orders.filter(o => o.shiftId === currentShift.id && o.status === 'Paid');
+    const cashCollected = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cashPaid || 0) - (o.paymentDetails?.changeGiven || 0), 0);
+    const expectedCash = currentShift.openingCash + cashCollected;
+    const diff = actualCash - expectedCash;
+
+    const closedShift: Shift = {
+      ...currentShift,
+      closedAt: new Date().toISOString(),
+      closingCashExpected: expectedCash,
+      closingCashActual: actualCash,
+      difference: diff,
+      status: 'Closed',
+      notes
+    };
+
+    const updatedAllShifts = shifts.map(s => s.id === closedShift.id ? closedShift : s);
+    updateShiftsState(updatedAllShifts);
+    updateCurrentShiftState(null);
+  };
+
+  // Manager Actions
+  const handleSaveMenuItem = (item: MenuItem) => {
+    const exists = menuItems.some(m => m.id === item.id);
+    if (exists) {
+      updateMenuItemsState(menuItems.map(m => m.id === item.id ? item : m));
+    } else {
+      updateMenuItemsState([...menuItems, item]);
+    }
+  };
+
+  const handleDeleteMenuItem = (itemId: string) => {
+    if (confirm('Delete this menu item from catalog?')) {
+      updateMenuItemsState(menuItems.filter(m => m.id !== itemId));
+    }
+  };
+
+  const handleSaveWaiter = (waiter: Waiter) => {
+    const exists = waiters.some(w => w.id === waiter.id);
+    if (exists) {
+      updateWaitersState(waiters.map(w => w.id === waiter.id ? waiter : w));
+    } else {
+      updateWaitersState([...waiters, waiter]);
+    }
+  };
+
+  const handleResetData = () => {
+    if (confirm('Are you sure you want to reset all data to initial demo state?')) {
+      resetAllDataToDefault();
+      window.location.reload();
+    }
+  };
+
+  // Pending counts
+  const pendingKitchenCount = kitchenTickets.filter(k => k.status === 'Pending' || k.status === 'Preparing').length;
+  const unpaidOrdersCount = orders.filter(o => o.paymentStatus !== 'PAID' && o.status !== 'Cancelled').length;
+  const lowStockCount = menuItems.filter(m => m.stockQuantity <= (m.minStockAlert || 5) && m.status === 'Available').length;
+
+  return (
+    <div className={`min-h-screen transition-colors duration-200 font-sans ${
+      darkMode ? 'bg-gray-950 text-gray-100' : 'bg-gray-100 text-gray-900'
+    }`}>
+      
+      {/* Top Header */}
+      <Header
+        currentShift={currentShift}
+        userRole={userRole}
+        setUserRole={setUserRole}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        lowStockCount={lowStockCount}
+        openShiftModal={() => setActiveTab('shifts')}
+        onNavigateToStock={() => setActiveTab('stock')}
+      />
+
+      {/* Main Navigation Bar */}
+      <Navigation
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        pendingKitchenCount={pendingKitchenCount}
+        unpaidOrdersCount={unpaidOrdersCount}
+        lowStockCount={lowStockCount}
+        userRole={userRole}
+        darkMode={darkMode}
+      />
+
+      {/* Primary Module Workspace */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            orders={orders}
+            tables={tables}
+            kitchenTickets={kitchenTickets}
+            menuItems={menuItems}
+            currentShift={currentShift}
+            setActiveTab={setActiveTab}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'order_center' && (
+          <OrderCenterList
+            orders={orders}
+            waiters={waiters}
+            menuItems={menuItems}
+            guestRooms={guestRooms}
+            cashierName={currentShift?.cashierName || 'Cashier Direct'}
+            userRole={userRole}
+            darkMode={darkMode}
+            onUpdateOrder={handleUpdateOrder}
+            onPrintReceipt={(ord) => setReceiptOrder(ord)}
+            onOpenPosForNewOrder={() => setActiveTab('pos')}
+          />
+        )}
+
+        {activeTab === 'pos' && (
+          <PosTerminal
+            menuItems={menuItems}
+            tables={tables}
+            waiters={waiters}
+            guestRooms={guestRooms}
+            currentShift={currentShift}
+            onOrderCompleted={handleOrderCompleted}
+            darkMode={darkMode}
+            openShiftModal={() => setActiveTab('shifts')}
+          />
+        )}
+
+        {activeTab === 'tables' && (
+          <TablesGrid
+            tables={tables}
+            waiters={waiters}
+            orders={orders}
+            onUpdateTableStatus={handleUpdateTableStatus}
+            onOpenTableOrder={handleOpenTableOrder}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'kitchen' && (
+          <KitchenTickets
+            kitchenTickets={kitchenTickets}
+            onUpdateStatus={handleUpdateKitchenStatus}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'pool_sauna' && (
+          <PoolSaunaModule
+            menuItems={menuItems}
+            currentShift={currentShift}
+            onTicketSold={(order) => handleOrderCompleted(order)}
+            darkMode={darkMode}
+            openShiftModal={() => setActiveTab('shifts')}
+          />
+        )}
+
+        {activeTab === 'stock' && (
+          <StockManagement
+            menuItems={menuItems}
+            stockLogs={stockLogs}
+            onUpdateStock={handleUpdateStock}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'shifts' && (
+          <ShiftManager
+            currentShift={currentShift}
+            allShifts={shifts}
+            orders={orders}
+            onOpenShift={handleOpenShift}
+            onCloseShift={handleCloseShift}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'report' && (
+          <DailyReportView
+            orders={orders}
+            menuItems={menuItems}
+            currentShift={currentShift}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'settings' && userRole === 'Manager' && (
+          <ManagerSettings
+            menuItems={menuItems}
+            waiters={waiters}
+            onSaveMenuItem={handleSaveMenuItem}
+            onDeleteMenuItem={handleDeleteMenuItem}
+            onSaveWaiter={handleSaveWaiter}
+            onResetData={handleResetData}
+            darkMode={darkMode}
+          />
+        )}
+      </main>
+
+      {/* Thermal Receipt Printable Modal */}
+      {receiptOrder && (
+        <ReceiptModal
+          order={receiptOrder}
+          onClose={() => setReceiptOrder(null)}
+          darkMode={darkMode}
+        />
+      )}
+
+    </div>
+  );
+}
