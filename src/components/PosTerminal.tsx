@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, Plus, Minus, Trash2, ShoppingCart, User, 
   UtensilsCrossed, Wine, DollarSign, CreditCard, Smartphone, 
-  Building, CheckCircle2, AlertCircle, FileText, Send, X, Ticket
+  Building, CheckCircle2, AlertCircle, FileText, Send, X, Ticket, Bell
 } from 'lucide-react';
 import { 
   MenuItem, Table, Waiter, GuestRoom, Order, OrderItem, 
   Category, PaymentMethod, PaymentDetails, Shift, KitchenTicket,
-  PaymentStatus, OrderStatus 
+  PaymentStatus, OrderStatus, AppUser 
 } from '../types';
+import { formatCurrency } from '../lib/currency';
 
 interface PosTerminalProps {
   menuItems: MenuItem[];
@@ -18,6 +19,7 @@ interface PosTerminalProps {
   currentShift: Shift | null;
   onOrderCompleted: (order: Order, newKot?: KitchenTicket) => void;
   darkMode: boolean;
+  currentUser?: AppUser;
   openShiftModal: () => void;
 }
 
@@ -29,6 +31,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   currentShift,
   onOrderCompleted,
   darkMode,
+  currentUser,
   openShiftModal
 }) => {
   // POS Order Header State
@@ -36,6 +39,18 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const [selectedWaiterId, setSelectedWaiterId] = useState<string>(waiters[0]?.id || '');
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
+
+  // Auto-select waiter if logged in user is a waiter
+  useEffect(() => {
+    if (currentUser && waiters.length > 0) {
+      const matched = waiters.find(
+        w => w.id === currentUser.id || w.name.toLowerCase() === currentUser.fullName.toLowerCase()
+      );
+      if (matched) {
+        setSelectedWaiterId(matched.id);
+      }
+    }
+  }, [currentUser, waiters]);
 
   // Cart State
   const [cartItems, setCartItems] = useState<OrderItem[]>([]);
@@ -145,6 +160,95 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       setDiscountAmount(0);
       setSpecialOrderNote('');
     }
+  };
+
+  // Submit Order as Waiter (Send directly to Cashier & Kitchen without immediate cash payment)
+  const handleSendOrderToCashierAndKitchen = () => {
+    if (cartItems.length === 0) {
+      alert('Please add items to cart before submitting order.');
+      return;
+    }
+
+    const activeWaiter = waiters.find(w => w.id === selectedWaiterId) || (currentUser ? { id: currentUser.id, name: currentUser.fullName } : null);
+    const selectedTable = tables.find(t => t.id === selectedTableId);
+    const selectedRoom = guestRooms.find(r => r.id === selectedRoomId);
+
+    const servicesSet = new Set<string>();
+    cartItems.forEach(item => {
+      if (item.category === 'Food') servicesSet.add('Food');
+      else if (item.category === 'Pool Services') servicesSet.add('Pool Services');
+      else if (item.category === 'Sauna Services') servicesSet.add('Sauna Services');
+      else if (item.category === 'Room Services') servicesSet.add('Room Services');
+      else if (item.category === 'Apartment Services') servicesSet.add('Apartment Services');
+      else servicesSet.add('Drinks');
+    });
+
+    const numId = Math.floor(1000 + Math.random() * 9000);
+    const orderId = `ORD-${numId}`;
+
+    const newOrder: Order = {
+      id: orderId,
+      orderNumber: `#ORD-${numId}`,
+      tableId: selectedTable?.id,
+      tableNumber: selectedTable?.tableNumber,
+      waiterId: activeWaiter?.id || 'w-1',
+      waiterName: activeWaiter?.name || (currentUser ? currentUser.fullName : 'Assigned Waiter'),
+      customerName: customerName.trim() || selectedRoom?.guestName || 'Walk-In Guest',
+      customerPhone: customerPhone.trim(),
+      guestRoomId: selectedRoom?.id,
+      servicesIncluded: Array.from(servicesSet),
+      items: cartItems,
+      subtotal,
+      tax,
+      discount: discountAmount,
+      total: grandTotal,
+      amountPaid: 0,
+      balance: grandTotal,
+      paymentStatus: 'UNPAID',
+      status: 'Pending',
+      paymentMethod: 'Cash',
+      paymentDetails: { method: 'Cash' },
+      paymentHistory: [],
+      createdAt: new Date().toISOString(),
+      shiftId: currentShift?.id || 'sh-1',
+      cashierName: currentShift?.cashierName || 'Cashier Desk',
+    };
+
+    const foodItemsInCart = cartItems.filter(i => i.isFood || i.category === 'Food');
+    let newKot: KitchenTicket | undefined = undefined;
+
+    if (foodItemsInCart.length > 0) {
+      const kotId = `KOT-${Math.floor(1000 + Math.random() * 9000)}`;
+      newKot = {
+        id: kotId,
+        orderId: orderId,
+        tableNumber: selectedTable?.tableNumber || selectedRoom?.number || 'Bar / Table',
+        waiterName: newOrder.waiterName,
+        customerName: newOrder.customerName,
+        items: foodItemsInCart.map(f => ({
+          itemId: f.itemId,
+          name: f.name,
+          quantity: f.quantity,
+          notes: f.notes
+        })),
+        orderTime: new Date().toISOString(),
+        status: 'Pending',
+        specialNotes: specialOrderNote
+      };
+      newOrder.kotGenerated = true;
+      newOrder.kotId = kotId;
+    }
+
+    onOrderCompleted(newOrder, newKot);
+
+    // Reset POS cart
+    setCartItems([]);
+    setDiscountAmount(0);
+    setSpecialOrderNote('');
+    setCustomerName('');
+    setSelectedTableId('');
+
+    alert(`✅ Order ${newOrder.orderNumber} successfully sent to Cashier & Kitchen!\nAssigned Waiter: ${newOrder.waiterName}\nTable: ${newOrder.tableNumber || 'Direct Bar/Counter'}`);
   };
 
   // Open Checkout Modal
@@ -646,27 +750,27 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
             <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
               <span>VAT Tax (18%)</span>
-              <span>${tax.toFixed(2)}</span>
+              <span>{formatCurrency(tax)}</span>
             </div>
 
             {/* Discount input */}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">Discount ($)</span>
+              <span className="text-gray-600 dark:text-gray-400">Discount (RWF)</span>
               <input
                 type="number"
                 min="0"
-                step="0.5"
+                step="100"
                 value={discountAmount || ''}
                 onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
-                placeholder="0.00"
-                className="w-20 px-2 py-1 text-right rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs font-bold"
+                placeholder="0"
+                className="w-24 px-2 py-1 text-right rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs font-bold"
               />
             </div>
 
             {/* Total */}
             <div className="flex justify-between items-center text-base font-black text-gray-900 dark:text-white pt-2 border-t border-gray-200 dark:border-gray-800">
               <span>Grand Total</span>
-              <span className="text-amber-600 dark:text-amber-400">${grandTotal.toFixed(2)}</span>
+              <span className="text-amber-600 dark:text-amber-400">{formatCurrency(grandTotal)}</span>
             </div>
 
             {/* Food Bon de Commande Indicator */}
@@ -677,15 +781,26 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
             )}
 
-            {/* Checkout Action Button */}
-            <button
-              disabled={cartItems.length === 0}
-              onClick={handleProceedToPayment}
-              className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold text-sm shadow-lg shadow-amber-500/30 flex items-center justify-center space-x-2 transition-all mt-2"
-            >
-              <DollarSign className="w-5 h-5" />
-              <span>Proceed to Payment (${grandTotal.toFixed(2)})</span>
-            </button>
+            {/* Checkout Action Buttons */}
+            <div className="space-y-2 mt-2">
+              <button
+                disabled={cartItems.length === 0}
+                onClick={handleSendOrderToCashierAndKitchen}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center space-x-2 transition-all"
+              >
+                <Send className="w-4 h-4" />
+                <span>Send Order to Cashier & Kitchen ({formatCurrency(grandTotal)})</span>
+              </button>
+
+              <button
+                disabled={cartItems.length === 0}
+                onClick={handleProceedToPayment}
+                className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold text-xs shadow-md shadow-amber-500/20 flex items-center justify-center space-x-2 transition-all"
+              >
+                <DollarSign className="w-4 h-4" />
+                <span>Pay Now & Close Order ({formatCurrency(grandTotal)})</span>
+              </button>
+            </div>
 
           </div>
 

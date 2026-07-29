@@ -139,7 +139,34 @@ export function saveTables(tables: Table[]): void {
 }
 
 export function loadWaiters(): Waiter[] {
-  return getStorage<Waiter[]>(KEYS.WAITERS, INITIAL_WAITERS);
+  const customWaiters = getStorage<Waiter[]>(KEYS.WAITERS, INITIAL_WAITERS);
+  let users: AppUser[] = [];
+  try {
+    users = loadUsers();
+  } catch (err) {
+    users = [];
+  }
+
+  const waiterUsers = users.filter(u => u.role === 'Waiter' && u.status === 'Active');
+  const combined = [...customWaiters];
+
+  waiterUsers.forEach(u => {
+    const existingIndex = combined.findIndex(
+      w => w.id === u.id || w.name.toLowerCase() === u.fullName.toLowerCase()
+    );
+    if (existingIndex === -1) {
+      combined.push({
+        id: u.id,
+        name: u.fullName,
+        employeeId: u.pinCode ? `PIN-${u.pinCode}` : `W-${u.id.slice(-4)}`,
+        phone: u.phone || '+250 780 000 000',
+        shift: 'Morning',
+        active: true
+      });
+    }
+  });
+
+  return combined;
 }
 
 export function saveWaiters(waiters: Waiter[]): void {

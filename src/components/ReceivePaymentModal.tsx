@@ -4,6 +4,7 @@ import {
   CheckCircle2, AlertCircle, X, User, Phone, FileText
 } from 'lucide-react';
 import { Order, PaymentMethod, PaymentTransaction, GuestRoom } from '../types';
+import { formatCurrency } from '../lib/currency';
 
 interface ReceivePaymentModalProps {
   order: Order;
@@ -99,7 +100,7 @@ export const ReceivePaymentModal: React.FC<ReceivePaymentModalProps> = ({
     }
 
     if (payAmount > currentBalance + 0.01) {
-      setError(`Payment amount ($${payAmount.toFixed(2)}) exceeds remaining balance ($${currentBalance.toFixed(2)})`);
+      setError(`Payment amount (${formatCurrency(payAmount)}) exceeds remaining balance (${formatCurrency(currentBalance)})`);
       return;
     }
 
@@ -201,15 +202,15 @@ export const ReceivePaymentModal: React.FC<ReceivePaymentModalProps> = ({
         <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 text-center mb-4">
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase">Order Total</p>
-            <p className="text-sm font-black text-gray-900 dark:text-white">${order.total.toFixed(2)}</p>
+            <p className="text-sm font-black text-gray-900 dark:text-white">{formatCurrency(order.total)}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase">Total Paid</p>
-            <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">${(order.amountPaid || 0).toFixed(2)}</p>
+            <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(order.amountPaid || 0)}</p>
           </div>
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase">Balance Due</p>
-            <p className="text-sm font-black text-amber-600 dark:text-amber-400">${currentBalance.toFixed(2)}</p>
+            <p className="text-sm font-black text-amber-600 dark:text-amber-400">{formatCurrency(currentBalance)}</p>
           </div>
         </div>
 
@@ -224,7 +225,7 @@ export const ReceivePaymentModal: React.FC<ReceivePaymentModalProps> = ({
                 : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
             }`}
           >
-            Full Payment (${currentBalance.toFixed(2)})
+            Full Payment ({formatCurrency(currentBalance)})
           </button>
           <button
             type="button"

@@ -169,7 +169,8 @@ export const TablesGrid: React.FC<TablesGridProps> = ({
     const activeOrders = orders.filter(
       o => (o.tableId === table.id || o.tableNumber === table.tableNumber) &&
            o.status !== 'Paid' &&
-           o.status !== 'Cancelled'
+           o.status !== 'Cancelled' &&
+           o.paymentStatus !== 'PAID'
     );
 
     if (activeOrders.length > 0) {
@@ -400,7 +401,8 @@ export const TablesGrid: React.FC<TablesGridProps> = ({
               const activeOrder = orders.find(
                 o => (o.tableId === table.id || o.tableNumber === table.tableNumber) &&
                      o.status !== 'Paid' &&
-                     o.status !== 'Cancelled'
+                     o.status !== 'Cancelled' &&
+                     o.paymentStatus !== 'PAID'
               );
               const assignedWaiter = waiters.find(w => w.id === table.assignedWaiterId);
               const isDeactivated = table.active === false;

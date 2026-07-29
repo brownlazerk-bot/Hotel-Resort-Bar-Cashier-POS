@@ -40,7 +40,8 @@ import { AuditLogView } from './components/AuditLogView';
 import { ProductServiceManager } from './components/ProductServiceManager';
 import { subscribeToSync, createDailyBackup, flushOfflineQueue } from './lib/syncEngine';
 import { startServerSyncPolling, pullServerState } from './lib/serverSync';
-import { WifiOff, RefreshCw } from 'lucide-react';
+import { WifiOff, RefreshCw, Bell } from 'lucide-react';
+import { formatCurrency } from './lib/currency';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
@@ -350,14 +351,36 @@ export default function App() {
     }
 
     // 4. Update Table Status if table was assigned
-    if (completedOrder.tableId) {
+    const tableIdentifierId = completedOrder.tableId;
+    const tableIdentifierNum = completedOrder.tableNumber;
+    if (tableIdentifierId || tableIdentifierNum) {
+      const isOrderPaid = completedOrder.paymentStatus === 'PAID' || completedOrder.status === 'Paid';
+
       const updatedTables = tables.map(t => {
-        if (t.id === completedOrder.tableId) {
-          return {
-            ...t,
-            status: 'Occupied' as TableStatus,
-            currentOrderId: completedOrder.id
-          };
+        const matchesTable = (tableIdentifierId && t.id === tableIdentifierId) || (tableIdentifierNum && t.tableNumber === tableIdentifierNum);
+        if (matchesTable) {
+          if (isOrderPaid) {
+            const otherUnpaid = orders.some(
+              o => o.id !== completedOrder.id &&
+                   ((tableIdentifierId && o.tableId === tableIdentifierId) || (tableIdentifierNum && o.tableNumber === tableIdentifierNum)) &&
+                   o.paymentStatus !== 'PAID' &&
+                   o.status !== 'Paid' &&
+                   o.status !== 'Cancelled'
+            );
+            if (!otherUnpaid) {
+              return {
+                ...t,
+                status: 'Available' as TableStatus,
+                currentOrderId: undefined
+              };
+            }
+          } else {
+            return {
+              ...t,
+              status: 'Occupied' as TableStatus,
+              currentOrderId: completedOrder.id
+            };
+          }
         }
         return t;
       });
@@ -431,15 +454,18 @@ export default function App() {
     updateStockLogsState(newLogs);
   };
 
-  // Helper to release table if no other active order exists on it
-  const releaseTableIfEmpty = (tableId?: string) => {
-    if (!tableId) return;
-    const remainingActiveOrders = orders.filter(
-      o => o.tableId === tableId && o.status !== 'Cancelled' && o.status !== 'Paid'
+  // Helper to release table if no other active unpaid order exists on it
+  const releaseTableIfEmpty = (tableId?: string, tableNumber?: string) => {
+    if (!tableId && !tableNumber) return;
+    const remainingUnpaidOrders = orders.filter(
+      o => ((tableId && o.tableId === tableId) || (tableNumber && o.tableNumber === tableNumber)) &&
+           o.status !== 'Cancelled' &&
+           o.status !== 'Paid' &&
+           o.paymentStatus !== 'PAID'
     );
-    if (remainingActiveOrders.length <= 1) {
+    if (remainingUnpaidOrders.length <= 1) {
       const updatedTables = tables.map(t => {
-        if (t.id === tableId) {
+        if ((tableId && t.id === tableId) || (tableNumber && t.tableNumber === tableNumber)) {
           return {
             ...t,
             status: 'Available' as TableStatus,
@@ -641,8 +667,37 @@ export default function App() {
     // If order is changed to Cancelled, trigger stock restoration
     if (updatedOrder.status === 'Cancelled' && oldOrder && oldOrder.status !== 'Cancelled') {
       restoreOrderStockToInventory(updatedOrder, 'Restored stock on order cancellation');
-      if (updatedOrder.tableId) {
-        releaseTableIfEmpty(updatedOrder.tableId);
+      if (updatedOrder.tableId || updatedOrder.tableNumber) {
+        releaseTableIfEmpty(updatedOrder.tableId, updatedOrder.tableNumber);
+      }
+    }
+
+    // Auto-release Table when order becomes PAID
+    const isOrderPaidNow = updatedOrder.paymentStatus === 'PAID' || updatedOrder.status === 'Paid';
+    const targetTableId = updatedOrder.tableId || oldOrder?.tableId;
+    const targetTableNum = updatedOrder.tableNumber || oldOrder?.tableNumber;
+
+    if (isOrderPaidNow && (targetTableId || targetTableNum)) {
+      const remainingUnpaidOnTable = orders.filter(
+        o => o.id !== updatedOrder.id &&
+             ((targetTableId && o.tableId === targetTableId) || (targetTableNum && o.tableNumber === targetTableNum)) &&
+             o.paymentStatus !== 'PAID' &&
+             o.status !== 'Paid' &&
+             o.status !== 'Cancelled'
+      );
+
+      if (remainingUnpaidOnTable.length === 0) {
+        const updatedTables = tables.map(t => {
+          if ((targetTableId && t.id === targetTableId) || (targetTableNum && t.tableNumber === targetTableNum)) {
+            return {
+              ...t,
+              status: 'Available' as TableStatus,
+              currentOrderId: undefined
+            };
+          }
+          return t;
+        });
+        updateTablesState(updatedTables);
       }
     }
 
@@ -922,6 +977,7 @@ export default function App() {
   const pendingKitchenCount = kitchenTickets.filter(k => k.status === 'Pending' || k.status === 'Preparing').length;
   const unpaidOrdersCount = orders.filter(o => o.paymentStatus !== 'PAID' && o.status !== 'Cancelled').length;
   const lowStockCount = menuItems.filter(m => m.stockQuantity <= (m.minStockAlert || 5) && m.status === 'Available').length;
+  const pendingWaiterOrders = orders.filter(o => (o.status === 'Pending' || o.paymentStatus === 'UNPAID') && o.status !== 'Cancelled');
 
   return (
     <div className={`min-h-screen transition-colors duration-200 font-sans ${
@@ -970,6 +1026,37 @@ export default function App() {
 
       {/* Primary Module Workspace */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        {/* Live Waiter Order Notification Banner for Cashiers */}
+        {pendingWaiterOrders.length > 0 && (userRole === 'Cashier' || userRole === 'Super Admin' || userRole === 'Admin' || userRole === 'Manager') && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/80 dark:border-amber-400 text-amber-900 dark:text-amber-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold shrink-0 animate-bounce">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-black flex items-center gap-2">
+                  <span>{pendingWaiterOrders.length} Pending Waiter Order(s) Received!</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500 text-slate-950 font-black uppercase tracking-wider">
+                    Cashier Alert
+                  </span>
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+                  Latest: <strong>{pendingWaiterOrders[0].orderNumber}</strong> by Waiter <strong>{pendingWaiterOrders[0].waiterName}</strong> for Table <strong>{pendingWaiterOrders[0].tableNumber || 'Bar / Counter'}</strong> ({formatCurrency(pendingWaiterOrders[0].total)})
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 shrink-0 w-full sm:w-auto justify-end">
+              <button
+                onClick={() => setActiveTab('order_center')}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shadow-md transition-all"
+              >
+                View Order Center & Receive Payment
+              </button>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'dashboard' && (
           <Dashboard
             orders={orders}
@@ -1010,6 +1097,7 @@ export default function App() {
             currentShift={currentShift}
             onOrderCompleted={handleOrderCompleted}
             darkMode={darkMode}
+            currentUser={currentUser}
             openShiftModal={() => setActiveTab('shifts')}
           />
         )}

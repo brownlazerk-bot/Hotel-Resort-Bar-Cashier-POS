@@ -1,6 +1,7 @@
 import React from 'react';
 import { Printer, Download, X, CheckCircle2, QrCode } from 'lucide-react';
 import { Order } from '../types';
+import { formatCurrency } from '../lib/currency';
 
 interface ReceiptModalProps {
   order: Order;
@@ -142,8 +143,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
                     {item.notes && <p className="text-[9px] text-gray-500 italic">({item.notes})</p>}
                   </div>
                   <span className="col-span-2 text-center">{item.quantity}</span>
-                  <span className="col-span-2 text-right">${item.unitPrice.toFixed(2)}</span>
-                  <span className="col-span-2 text-right font-semibold">${item.totalPrice.toFixed(2)}</span>
+                  <span className="col-span-2 text-right">{formatCurrency(item.unitPrice)}</span>
+                  <span className="col-span-2 text-right font-semibold">{formatCurrency(item.totalPrice)}</span>
                 </div>
               ))}
             </div>
@@ -153,23 +154,23 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
           <div className="border-t border-dashed border-gray-300 dark:border-gray-700 pt-2 mt-3 space-y-1 text-[11px]">
             <div className="flex justify-between">
               <span>Subtotal:</span>
-              <span>${order.subtotal.toFixed(2)}</span>
+              <span>{formatCurrency(order.subtotal)}</span>
             </div>
             {order.tax > 0 && (
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
                 <span>VAT Tax (18%):</span>
-                <span>${order.tax.toFixed(2)}</span>
+                <span>{formatCurrency(order.tax)}</span>
               </div>
             )}
             {order.discount > 0 && (
               <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                 <span>Discount Applied:</span>
-                <span>-${order.discount.toFixed(2)}</span>
+                <span>-{formatCurrency(order.discount)}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-sm text-gray-900 dark:text-white pt-1 border-t border-gray-300 dark:border-gray-700">
               <span>GRAND TOTAL:</span>
-              <span>${order.total.toFixed(2)}</span>
+              <span>{formatCurrency(order.total)}</span>
             </div>
           </div>
 
@@ -185,31 +186,31 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
               {order.paymentDetails.cashPaid ? (
                 <div className="flex justify-between">
                   <span>Cash Paid:</span>
-                  <span>${order.paymentDetails.cashPaid.toFixed(2)}</span>
+                  <span>{formatCurrency(order.paymentDetails.cashPaid)}</span>
                 </div>
               ) : null}
               {order.paymentDetails.changeGiven ? (
                 <div className="flex justify-between font-semibold text-emerald-600 dark:text-emerald-400">
                   <span>Change Tendered:</span>
-                  <span>${order.paymentDetails.changeGiven.toFixed(2)}</span>
+                  <span>{formatCurrency(order.paymentDetails.changeGiven)}</span>
                 </div>
               ) : null}
               {order.paymentDetails.cardPaid ? (
                 <div className="flex justify-between">
                   <span>Card Charged:</span>
-                  <span>${order.paymentDetails.cardPaid.toFixed(2)}</span>
+                  <span>{formatCurrency(order.paymentDetails.cardPaid)}</span>
                 </div>
               ) : null}
               {order.paymentDetails.mobileMoneyPaid ? (
                 <div className="flex justify-between">
                   <span>Mobile Money Paid:</span>
-                  <span>${order.paymentDetails.mobileMoneyPaid.toFixed(2)}</span>
+                  <span>{formatCurrency(order.paymentDetails.mobileMoneyPaid)}</span>
                 </div>
               ) : null}
               {order.paymentDetails.roomChargeAmount ? (
                 <div className="flex justify-between font-semibold text-amber-700 dark:text-amber-300">
                   <span>Charged to Folio:</span>
-                  <span>{order.paymentDetails.roomOrAptNumber} (${order.paymentDetails.roomChargeAmount.toFixed(2)})</span>
+                  <span>{order.paymentDetails.roomOrAptNumber} ({formatCurrency(order.paymentDetails.roomChargeAmount)})</span>
                 </div>
               ) : null}
             </div>
