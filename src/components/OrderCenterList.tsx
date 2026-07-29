@@ -2,18 +2,20 @@ import React, { useState } from 'react';
 import { 
   Search, Filter, Plus, DollarSign, Printer, ChefHat, 
   Eye, CheckCircle2, AlertCircle, Clock, Calendar, User, 
-  Phone, Receipt, ArrowUpDown, X, Tag, ShieldCheck, Sparkles, Waves, RefreshCw
+  Phone, Receipt, ArrowUpDown, X, Tag, ShieldCheck, Sparkles, Waves, RefreshCw, Edit
 } from 'lucide-react';
 import { 
   Order, OrderStatus, PaymentStatus, Waiter, 
-  MenuItem, GuestRoom, KitchenTicket 
+  MenuItem, GuestRoom, KitchenTicket, Table 
 } from '../types';
 import { ReceivePaymentModal } from './ReceivePaymentModal';
 import { AddItemModal } from './AddItemModal';
 import { OrderDetailsModal } from './OrderDetailsModal';
+import { EditOrderModal } from './EditOrderModal';
 
 interface OrderCenterListProps {
   orders: Order[];
+  tables: Table[];
   waiters: Waiter[];
   menuItems: MenuItem[];
   guestRooms: GuestRoom[];
@@ -21,6 +23,9 @@ interface OrderCenterListProps {
   userRole: 'Cashier' | 'Manager';
   darkMode: boolean;
   onUpdateOrder: (updatedOrder: Order, newKot?: KitchenTicket) => void;
+  onSaveOrderEdits: (updatedOrder: Order) => void;
+  onCancelOrderAndReturnStock: (order: Order) => void;
+  onDeleteOrderAndReturnStock: (orderId: string) => void;
   onPrintReceipt: (order: Order) => void;
   onPrintKot?: (order: Order) => void;
   onOpenPosForNewOrder: () => void;
@@ -28,6 +33,7 @@ interface OrderCenterListProps {
 
 export const OrderCenterList: React.FC<OrderCenterListProps> = ({
   orders,
+  tables,
   waiters,
   menuItems,
   guestRooms,
@@ -35,6 +41,9 @@ export const OrderCenterList: React.FC<OrderCenterListProps> = ({
   userRole,
   darkMode,
   onUpdateOrder,
+  onSaveOrderEdits,
+  onCancelOrderAndReturnStock,
+  onDeleteOrderAndReturnStock,
   onPrintReceipt,
   onPrintKot,
   onOpenPosForNewOrder
@@ -51,6 +60,7 @@ export const OrderCenterList: React.FC<OrderCenterListProps> = ({
   const [activeOrderForPayment, setActiveOrderForPayment] = useState<Order | null>(null);
   const [activeOrderForAddItems, setActiveOrderForAddItems] = useState<Order | null>(null);
   const [activeOrderForDetails, setActiveOrderForDetails] = useState<Order | null>(null);
+  const [activeOrderForEdit, setActiveOrderForEdit] = useState<Order | null>(null);
 
   // Filter Logic
   const filteredOrders = orders.filter(o => {
@@ -216,14 +226,9 @@ export const OrderCenterList: React.FC<OrderCenterListProps> = ({
     onUpdateOrder(updated);
   };
 
-  // Quick Action: Cancel Order
+  // Quick Action: Cancel Order (With Direct Stock Return)
   const handleCancelOrder = (order: Order) => {
-    const updated: Order = {
-      ...order,
-      status: 'Cancelled',
-      paymentStatus: 'UNPAID'
-    };
-    onUpdateOrder(updated);
+    onCancelOrderAndReturnStock(order);
   };
 
   return (
@@ -522,6 +527,17 @@ export const OrderCenterList: React.FC<OrderCenterListProps> = ({
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* Edit Order (Table, Waiter, Items) */}
+                          {order.status !== 'Cancelled' && (
+                            <button
+                              title="Edit Order (Table / Waiter / Items)"
+                              onClick={() => setActiveOrderForEdit(order)}
+                              className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           {/* Receive Payment Modal */}
                           {order.status !== 'Cancelled' && (
                             <button
@@ -538,7 +554,7 @@ export const OrderCenterList: React.FC<OrderCenterListProps> = ({
                             <button
                               title="Add Items to Order"
                               onClick={() => setActiveOrderForAddItems(order)}
-                              className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                              className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -578,9 +594,9 @@ export const OrderCenterList: React.FC<OrderCenterListProps> = ({
                           {/* Cancel Order */}
                           {order.status !== 'Cancelled' && (
                             <button
-                              title="Cancel Order"
+                              title="Cancel Order & Return Stock"
                               onClick={() => {
-                                if (confirm(`Cancel Order ${order.orderNumber || order.id}?`)) {
+                                if (confirm(`Cancel Order ${order.orderNumber || order.id}? All stock will be returned to inventory.`)) {
                                   handleCancelOrder(order);
                                 }
                               }}
@@ -639,6 +655,10 @@ export const OrderCenterList: React.FC<OrderCenterListProps> = ({
           darkMode={darkMode}
           userRole={userRole}
           onClose={() => setActiveOrderForDetails(null)}
+          onEditOrder={(ord) => {
+            setActiveOrderForDetails(null);
+            setActiveOrderForEdit(ord);
+          }}
           onReceivePayment={(ord) => {
             setActiveOrderForDetails(null);
             setActiveOrderForPayment(ord);
@@ -652,6 +672,30 @@ export const OrderCenterList: React.FC<OrderCenterListProps> = ({
           onCancelOrder={(ord) => {
             handleCancelOrder(ord);
             setActiveOrderForDetails(null);
+          }}
+        />
+      )}
+
+      {/* Edit Order Modal */}
+      {activeOrderForEdit && (
+        <EditOrderModal
+          order={activeOrderForEdit}
+          tables={tables}
+          waiters={waiters}
+          menuItems={menuItems}
+          darkMode={darkMode}
+          onClose={() => setActiveOrderForEdit(null)}
+          onSaveOrderEdits={(updatedOrder) => {
+            onSaveOrderEdits(updatedOrder);
+            setActiveOrderForEdit(null);
+          }}
+          onCancelOrderAndReturnStock={(ord) => {
+            onCancelOrderAndReturnStock(ord);
+            setActiveOrderForEdit(null);
+          }}
+          onDeleteOrderAndReturnStock={(ordId) => {
+            onDeleteOrderAndReturnStock(ordId);
+            setActiveOrderForEdit(null);
           }}
         />
       )}

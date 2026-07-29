@@ -39,6 +39,7 @@ import { UserManagement } from './components/UserManagement';
 import { AuditLogView } from './components/AuditLogView';
 import { ProductServiceManager } from './components/ProductServiceManager';
 import { subscribeToSync, createDailyBackup, flushOfflineQueue } from './lib/syncEngine';
+import { startServerSyncPolling, pullServerState } from './lib/serverSync';
 import { WifiOff, RefreshCw } from 'lucide-react';
 
 export default function App() {
@@ -98,8 +99,16 @@ export default function App() {
       // Backup fallback
     }
 
-    // Subscribe to real-time sync across connected tabs/windows
+    // Subscribe to real-time sync across connected tabs/windows & devices
     const unsubscribeSync = subscribeToSync((_entityKey) => {
+      refreshAllStateFromStorage();
+    });
+
+    // Start central Express server polling (syncs HP, Dell, Phone, etc.)
+    const stopServerPolling = startServerSyncPolling(3000);
+
+    // Initial pull from server
+    pullServerState().then(() => {
       refreshAllStateFromStorage();
     });
 
@@ -107,7 +116,7 @@ export default function App() {
     const handleOnline = () => {
       setIsOnline(true);
       flushOfflineQueue();
-      refreshAllStateFromStorage();
+      pullServerState().then(() => refreshAllStateFromStorage());
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -118,6 +127,7 @@ export default function App() {
 
     return () => {
       unsubscribeSync();
+      stopServerPolling();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -385,9 +395,257 @@ export default function App() {
     setReceiptOrder(completedOrder);
   };
 
+  // Helper to Return Stock to Inventory for an order
+  const restoreOrderStockToInventory = (orderToCancel: Order, reasonText: string) => {
+    let updatedMenuItems = [...menuItems];
+    let newLogs: StockAdjustmentLog[] = [...stockLogs];
+
+    orderToCancel.items.forEach((item) => {
+      const targetIndex = updatedMenuItems.findIndex(m => m.id === item.itemId);
+      if (targetIndex > -1) {
+        const prevStock = updatedMenuItems[targetIndex].stockQuantity;
+        const newStock = prevStock + item.quantity;
+
+        updatedMenuItems[targetIndex] = {
+          ...updatedMenuItems[targetIndex],
+          stockQuantity: newStock,
+          status: newStock > 0 ? 'Available' : updatedMenuItems[targetIndex].status
+        };
+
+        newLogs.unshift({
+          id: `log-${Date.now()}-${Math.random()}`,
+          itemId: item.itemId,
+          itemName: item.name,
+          type: 'Return',
+          quantityChange: item.quantity,
+          previousStock: prevStock,
+          newStock: newStock,
+          reason: `${reasonText} (Order #${orderToCancel.orderNumber || orderToCancel.id})`,
+          timestamp: new Date().toISOString(),
+          actor: currentShift?.cashierName || currentUser?.fullName || 'System'
+        });
+      }
+    });
+
+    updateMenuItemsState(updatedMenuItems);
+    updateStockLogsState(newLogs);
+  };
+
+  // Helper to release table if no other active order exists on it
+  const releaseTableIfEmpty = (tableId?: string) => {
+    if (!tableId) return;
+    const remainingActiveOrders = orders.filter(
+      o => o.tableId === tableId && o.status !== 'Cancelled' && o.status !== 'Paid'
+    );
+    if (remainingActiveOrders.length <= 1) {
+      const updatedTables = tables.map(t => {
+        if (t.id === tableId) {
+          return {
+            ...t,
+            status: 'Available' as TableStatus,
+            currentOrderId: undefined
+          };
+        }
+        return t;
+      });
+      updateTablesState(updatedTables);
+    }
+  };
+
+  // 1. Cancel Order with Direct Stock Restoration
+  const handleCancelOrderAndReturnStock = (orderToCancel: Order) => {
+    playSound('order');
+
+    // Return Stock if not already cancelled
+    if (orderToCancel.status !== 'Cancelled') {
+      restoreOrderStockToInventory(orderToCancel, 'Direct Stock Restoration on Order Cancellation');
+    }
+
+    // Release Table
+    if (orderToCancel.tableId) {
+      releaseTableIfEmpty(orderToCancel.tableId);
+    }
+
+    // Update Order Status
+    const updatedOrder: Order = {
+      ...orderToCancel,
+      status: 'Cancelled',
+      paymentStatus: 'UNPAID'
+    };
+
+    const updatedOrders = orders.map(o => o.id === orderToCancel.id ? updatedOrder : o);
+    updateOrdersState(updatedOrders);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Cancel Order & Return Stock',
+        category: 'Sales',
+        details: `Cancelled order #${orderToCancel.orderNumber || orderToCancel.id} - ${orderToCancel.items.length} items directly returned to inventory stock`
+      });
+    }
+  };
+
+  // 2. Delete Order completely with Direct Stock Restoration
+  const handleDeleteOrderAndReturnStock = (orderId: string) => {
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (!targetOrder) return;
+
+    if (targetOrder.status !== 'Cancelled') {
+      restoreOrderStockToInventory(targetOrder, 'Stock Restored on Order Deletion');
+      if (targetOrder.tableId) {
+        releaseTableIfEmpty(targetOrder.tableId);
+      }
+    }
+
+    const updatedOrders = orders.filter(o => o.id !== orderId);
+    updateOrdersState(updatedOrders);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Delete Order & Return Stock',
+        category: 'Sales',
+        details: `Deleted order #${targetOrder.orderNumber || targetOrder.id} - Stock restored`
+      });
+    }
+  };
+
+  // 3. Save Comprehensive Order Edits (Table, Waiter, Items, Customer)
+  const handleSaveOrderEdits = (updatedOrder: Order) => {
+    playSound('order');
+
+    const oldOrder = orders.find(o => o.id === updatedOrder.id);
+    if (!oldOrder) return;
+
+    // Check item quantity changes & adjust stock accordingly
+    let updatedMenuItems = [...menuItems];
+    let newLogs: StockAdjustmentLog[] = [...stockLogs];
+
+    // Find items that were changed or removed
+    oldOrder.items.forEach(oldItem => {
+      const newItem = updatedOrder.items.find(i => i.itemId === oldItem.itemId);
+      const newQty = newItem ? newItem.quantity : 0;
+      const diff = newQty - oldItem.quantity; // positive means added, negative means returned
+
+      if (diff !== 0) {
+        const targetIdx = updatedMenuItems.findIndex(m => m.id === oldItem.itemId);
+        if (targetIdx > -1) {
+          const prevStock = updatedMenuItems[targetIdx].stockQuantity;
+          const newStock = Math.max(0, prevStock - diff);
+
+          updatedMenuItems[targetIdx] = {
+            ...updatedMenuItems[targetIdx],
+            stockQuantity: newStock,
+            status: newStock === 0 ? 'Out of Stock' : 'Available'
+          };
+
+          newLogs.unshift({
+            id: `log-${Date.now()}-${Math.random()}`,
+            itemId: oldItem.itemId,
+            itemName: oldItem.name,
+            type: diff < 0 ? 'Return' : 'Sale',
+            quantityChange: -diff,
+            previousStock: prevStock,
+            newStock: newStock,
+            reason: `Order Edit #${updatedOrder.orderNumber || updatedOrder.id} (${diff < 0 ? 'Item Returned to Stock' : 'Item Added'})`,
+            timestamp: new Date().toISOString(),
+            actor: currentShift?.cashierName || currentUser?.fullName || 'System'
+          });
+        }
+      }
+    });
+
+    // Find brand new items added in edit
+    updatedOrder.items.forEach(newItem => {
+      const existsInOld = oldOrder.items.some(i => i.itemId === newItem.itemId);
+      if (!existsInOld) {
+        const targetIdx = updatedMenuItems.findIndex(m => m.id === newItem.itemId);
+        if (targetIdx > -1) {
+          const prevStock = updatedMenuItems[targetIdx].stockQuantity;
+          const newStock = Math.max(0, prevStock - newItem.quantity);
+
+          updatedMenuItems[targetIdx] = {
+            ...updatedMenuItems[targetIdx],
+            stockQuantity: newStock,
+            status: newStock === 0 ? 'Out of Stock' : 'Available'
+          };
+
+          newLogs.unshift({
+            id: `log-${Date.now()}-${Math.random()}`,
+            itemId: newItem.itemId,
+            itemName: newItem.name,
+            type: 'Sale',
+            quantityChange: -newItem.quantity,
+            previousStock: prevStock,
+            newStock: newStock,
+            reason: `Order Edit #${updatedOrder.orderNumber || updatedOrder.id} (New Item Added)`,
+            timestamp: new Date().toISOString(),
+            actor: currentShift?.cashierName || currentUser?.fullName || 'System'
+          });
+        }
+      }
+    });
+
+    updateMenuItemsState(updatedMenuItems);
+    updateStockLogsState(newLogs);
+
+    // Table Reassignment handling
+    if (oldOrder.tableId !== updatedOrder.tableId) {
+      let updatedTables = [...tables];
+
+      // Release old table if no other active order
+      if (oldOrder.tableId) {
+        const remainingOnOld = orders.filter(o => o.id !== oldOrder.id && o.tableId === oldOrder.tableId && o.status !== 'Cancelled' && o.status !== 'Paid');
+        if (remainingOnOld.length === 0) {
+          updatedTables = updatedTables.map(t => t.id === oldOrder.tableId ? { ...t, status: 'Available' as TableStatus, currentOrderId: undefined } : t);
+        }
+      }
+
+      // Assign new table
+      if (updatedOrder.tableId) {
+        updatedTables = updatedTables.map(t => t.id === updatedOrder.tableId ? { ...t, status: 'Occupied' as TableStatus, currentOrderId: updatedOrder.id, assignedWaiterId: updatedOrder.waiterId } : t);
+      }
+
+      updateTablesState(updatedTables);
+    }
+
+    // Save updated order
+    const updatedOrders = orders.map(o => o.id === updatedOrder.id ? updatedOrder : o);
+    updateOrdersState(updatedOrders);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Edit Order',
+        category: 'Sales',
+        details: `Edited order #${updatedOrder.orderNumber || updatedOrder.id}: Table updated to ${updatedOrder.tableNumber}, Waiter: ${updatedOrder.waiterName}, Total: ${updatedOrder.total}`
+      });
+    }
+  };
+
   // Handle Updating Existing Order (Payments, Added Items, Status Changes)
   const handleUpdateOrder = (updatedOrder: Order, newKot?: KitchenTicket) => {
     playSound('order');
+    const oldOrder = orders.find(o => o.id === updatedOrder.id);
+    
+    // If order is changed to Cancelled, trigger stock restoration
+    if (updatedOrder.status === 'Cancelled' && oldOrder && oldOrder.status !== 'Cancelled') {
+      restoreOrderStockToInventory(updatedOrder, 'Restored stock on order cancellation');
+      if (updatedOrder.tableId) {
+        releaseTableIfEmpty(updatedOrder.tableId);
+      }
+    }
+
     const updatedOrders = orders.map(o => o.id === updatedOrder.id ? updatedOrder : o);
     updateOrdersState(updatedOrders);
 
@@ -727,6 +985,7 @@ export default function App() {
         {activeTab === 'order_center' && (
           <OrderCenterList
             orders={orders}
+            tables={tables}
             waiters={waiters}
             menuItems={menuItems}
             guestRooms={guestRooms}
@@ -734,6 +993,9 @@ export default function App() {
             userRole={userRole}
             darkMode={darkMode}
             onUpdateOrder={handleUpdateOrder}
+            onSaveOrderEdits={handleSaveOrderEdits}
+            onCancelOrderAndReturnStock={handleCancelOrderAndReturnStock}
+            onDeleteOrderAndReturnStock={handleDeleteOrderAndReturnStock}
             onPrintReceipt={(ord) => setReceiptOrder(ord)}
             onOpenPosForNewOrder={() => setActiveTab('pos')}
           />

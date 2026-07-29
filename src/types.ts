@@ -194,7 +194,7 @@ export interface StockAdjustmentLog {
   id: string;
   itemId: string;
   itemName: string;
-  type: 'Purchase' | 'Sale' | 'Adjustment' | 'Waste' | 'Damaged';
+  type: 'Purchase' | 'Sale' | 'Adjustment' | 'Waste' | 'Damaged' | 'Return';
   quantityChange: number; // positive for addition, negative for deduction
   previousStock: number;
   newStock: number;

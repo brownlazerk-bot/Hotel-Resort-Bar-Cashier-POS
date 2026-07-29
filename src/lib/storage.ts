@@ -88,11 +88,35 @@ function getStorage<T>(key: string, defaultValue: T): T {
 }
 
 import { notifyDataChange } from './syncEngine';
+import { pushKeyToServer } from './serverSync';
+
+const LOCAL_TO_SERVER_KEY: Record<string, string> = {
+  [KEYS.MENU_ITEMS]: 'menuItems',
+  [KEYS.TABLES]: 'tables',
+  [KEYS.WAITERS]: 'waiters',
+  [KEYS.ORDERS]: 'orders',
+  [KEYS.KITCHEN_TICKETS]: 'kitchenTickets',
+  [KEYS.STOCK_LOGS]: 'stockLogs',
+  [KEYS.SHIFTS]: 'shifts',
+  [KEYS.CURRENT_SHIFT]: 'currentShift',
+  [KEYS.GUEST_ROOMS]: 'guestRooms',
+  [KEYS.USERS]: 'users',
+  [KEYS.AUDIT_LOGS]: 'auditLogs',
+  [KEYS.EXPENSES]: 'expenses',
+  [KEYS.CASH_MOVEMENTS]: 'cashMovements',
+  [KEYS.DAILY_CLOSINGS]: 'dailyClosings',
+};
 
 function setStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     notifyDataChange(key);
+    
+    // Asynchronously push to central Express backend server for cross-device sync (HP, Dell, Phone)
+    const serverKey = LOCAL_TO_SERVER_KEY[key];
+    if (serverKey) {
+      pushKeyToServer(serverKey, value);
+    }
   } catch (err) {
     console.error(`Error saving ${key} to storage:`, err);
   }

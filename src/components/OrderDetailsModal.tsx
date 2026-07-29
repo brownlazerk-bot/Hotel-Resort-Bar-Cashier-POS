@@ -13,6 +13,7 @@ interface OrderDetailsModalProps {
   onPrintReceipt: (order: Order) => void;
   onPrintKot?: (order: Order) => void;
   onCancelOrder: (order: Order) => void;
+  onEditOrder?: (order: Order) => void;
   darkMode: boolean;
   userRole: 'Cashier' | 'Manager';
 }
@@ -25,6 +26,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   onPrintReceipt,
   onPrintKot,
   onCancelOrder,
+  onEditOrder,
   darkMode,
   userRole
 }) => {
@@ -203,7 +205,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
         )}
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-gray-200 dark:border-gray-800">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-gray-200 dark:border-gray-800">
           <button
             onClick={() => { onClose(); onReceivePayment(order); }}
             className="py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-center space-x-1"
@@ -211,6 +213,15 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
             <DollarSign className="w-4 h-4" />
             <span>Pay / Deposit</span>
           </button>
+
+          {onEditOrder && order.status !== 'Cancelled' && (
+            <button
+              onClick={() => { onClose(); onEditOrder(order); }}
+              className="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center space-x-1"
+            >
+              <span>Edit Order</span>
+            </button>
+          )}
 
           <button
             onClick={() => { onClose(); onAddItems(order); }}
@@ -230,7 +241,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
           {userRole === 'Manager' || order.status !== 'Paid' ? (
             <button
               onClick={() => {
-                if (confirm('Are you sure you want to cancel this order?')) {
+                if (confirm('Are you sure you want to cancel this order? All stock items will be returned to inventory.')) {
                   onCancelOrder(order);
                   onClose();
                 }
