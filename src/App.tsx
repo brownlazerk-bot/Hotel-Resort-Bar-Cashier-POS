@@ -38,12 +38,15 @@ import { LoginView } from './components/LoginView';
 import { UserManagement } from './components/UserManagement';
 import { AuditLogView } from './components/AuditLogView';
 import { ProductServiceManager } from './components/ProductServiceManager';
+import { subscribeToSync, createDailyBackup, flushOfflineQueue } from './lib/syncEngine';
+import { WifiOff, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('Cashier');
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
 
   // Core Data States
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -62,14 +65,8 @@ export default function App() {
   // Receipt Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
 
-  // Load Initial Data & Session from Storage
-  useEffect(() => {
-    const loggedInUser = loadCurrentUser();
-    if (loggedInUser) {
-      setCurrentUser(loggedInUser);
-      setUserRole(loggedInUser.role === 'Super Admin' || loggedInUser.role === 'Admin' || loggedInUser.role === 'Manager' ? 'Manager' : 'Cashier');
-    }
-
+  // Helper to refresh all data states from storage
+  const refreshAllStateFromStorage = () => {
     setMenuItems(loadMenuItems());
     setTables(loadTables());
     setWaiters(loadWaiters());
@@ -82,7 +79,88 @@ export default function App() {
     setExpenses(loadExpenses());
     setCashMovements(loadCashMovements());
     setDailyClosings(loadDailyClosings());
+  };
+
+  // Load Initial Data, Sync Engine, Online/Offline & Auto-Backup
+  useEffect(() => {
+    const loggedInUser = loadCurrentUser();
+    if (loggedInUser) {
+      setCurrentUser(loggedInUser);
+      setUserRole(loggedInUser.role === 'Super Admin' || loggedInUser.role === 'Admin' || loggedInUser.role === 'Manager' ? 'Manager' : 'Cashier');
+    }
+
+    refreshAllStateFromStorage();
+
+    // Trigger daily backup
+    try {
+      createDailyBackup(loggedInUser?.fullName || 'System Auto-Backup');
+    } catch (e) {
+      // Backup fallback
+    }
+
+    // Subscribe to real-time sync across connected tabs/windows
+    const unsubscribeSync = subscribeToSync((_entityKey) => {
+      refreshAllStateFromStorage();
+    });
+
+    // Handle online/offline network transitions
+    const handleOnline = () => {
+      setIsOnline(true);
+      flushOfflineQueue();
+      refreshAllStateFromStorage();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      unsubscribeSync();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
+
+  // Inactivity Auto-Logout Timer (15 Minutes)
+  useEffect(() => {
+    if (!currentUser) return;
+    let timeoutId: any;
+
+    const resetInactivityTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        addAuditLog({
+          userId: currentUser.id,
+          userName: currentUser.fullName,
+          userRole: currentUser.role,
+          userEmail: currentUser.email,
+          action: 'Auto-Logout',
+          category: 'Auth',
+          details: 'User automatically logged out due to 15 minutes of inactivity'
+        });
+        clearCurrentUser();
+        setCurrentUser(null);
+        alert('Security Alert: You have been logged out due to 15 minutes of inactivity.');
+      }, 15 * 60 * 1000);
+    };
+
+    window.addEventListener('mousemove', resetInactivityTimer);
+    window.addEventListener('keydown', resetInactivityTimer);
+    window.addEventListener('click', resetInactivityTimer);
+    window.addEventListener('scroll', resetInactivityTimer);
+
+    resetInactivityTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', resetInactivityTimer);
+      window.removeEventListener('keydown', resetInactivityTimer);
+      window.removeEventListener('click', resetInactivityTimer);
+      window.removeEventListener('scroll', resetInactivityTimer);
+    };
+  }, [currentUser]);
 
   const handleLoginSuccess = (user: AppUser) => {
     setCurrentUser(user);
@@ -542,6 +620,21 @@ export default function App() {
     <div className={`min-h-screen transition-colors duration-200 font-sans ${
       darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'
     }`}>
+
+      {/* Offline Mode Banner */}
+      {!isOnline && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-2.5 text-xs font-black flex flex-col sm:flex-row items-center justify-between shadow-lg sticky top-0 z-50 border-b border-amber-600 gap-2">
+          <div className="flex items-center space-x-2">
+            <WifiOff className="w-4 h-4 animate-bounce text-slate-950 shrink-0" />
+            <span>Offline Mode — Network disconnected. System operating in local safe mode. Pending changes will auto-synchronize when connection is restored.</span>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <span className="text-[10px] bg-slate-950 text-amber-400 font-mono px-2.5 py-0.5 rounded-full uppercase tracking-wider font-bold">
+              Offline Queue Active
+            </span>
+          </div>
+        </div>
+      )}
       
       {/* Top Header */}
       <Header

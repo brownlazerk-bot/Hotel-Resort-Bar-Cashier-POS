@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, Plus, Edit, Trash2, Users, Shield, 
-  RotateCcw, Save, Wine, UserCheck, AlertCircle 
+  RotateCcw, Save, Wine, UserCheck, AlertCircle, Database, Download, Upload, CheckCircle2
 } from 'lucide-react';
 import { MenuItem, Waiter, Category, ItemStatus } from '../types';
+import { createDailyBackup, loadBackups, restoreBackupSnapshot, DatabaseBackup } from '../lib/syncEngine';
 
 interface ManagerSettingsProps {
   menuItems: MenuItem[];
@@ -24,7 +25,9 @@ export const ManagerSettings: React.FC<ManagerSettingsProps> = ({
   onResetData,
   darkMode
 }) => {
-  const [activeTab, setActiveTab] = useState<'menu' | 'waiters' | 'security'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'waiters' | 'security' | 'backups'>('menu');
+  const [backups, setBackups] = useState<DatabaseBackup[]>([]);
+  const [backupMsg, setBackupMsg] = useState<string>('');
 
   // Menu Item Modal state
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -156,11 +159,16 @@ export const ManagerSettings: React.FC<ManagerSettingsProps> = ({
             </p>
           </div>
 
-          <div className="flex space-x-2">
-            {['menu', 'waiters', 'security'].map((tab) => (
+          <div className="flex flex-wrap gap-2">
+            {['menu', 'waiters', 'security', 'backups'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab as any)}
+                onClick={() => {
+                  setActiveTab(tab as any);
+                  if (tab === 'backups') {
+                    setBackups(loadBackups());
+                  }
+                }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold capitalize transition-all ${
                   activeTab === tab
                     ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
@@ -169,7 +177,7 @@ export const ManagerSettings: React.FC<ManagerSettingsProps> = ({
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {tab === 'menu' ? 'Menu Catalog' : tab === 'waiters' ? 'Waiters Roster' : 'Security'}
+                {tab === 'menu' ? 'Menu Catalog' : tab === 'waiters' ? 'Waiters Roster' : tab === 'security' ? 'Security' : 'Daily Backups'}
               </button>
             ))}
           </div>
@@ -304,6 +312,142 @@ export const ManagerSettings: React.FC<ManagerSettingsProps> = ({
               <RotateCcw className="w-4 h-4" />
               <span>Reset All Data to Demo Default</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* DAILY BACKUPS & DISASTER RECOVERY TAB */}
+      {activeTab === 'backups' && (
+        <div className={`p-5 rounded-2xl border space-y-6 transition-colors ${
+          darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+        }`}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-200 dark:border-gray-800">
+            <div>
+              <div className="flex items-center space-x-2 text-emerald-500">
+                <Database className="w-5 h-5" />
+                <h3 className="font-bold text-base text-gray-900 dark:text-white">Centralized Automated Database Backups</h3>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Daily database snapshots are automatically generated. Super Admin can restore snapshots or export JSON files.
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  const bkp = createDailyBackup('Super Admin Manual');
+                  setBackups(loadBackups());
+                  setBackupMsg(`Backup snapshot created successfully! [ID: ${bkp.id}]`);
+                  setTimeout(() => setBackupMsg(''), 4000);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center space-x-2 shadow-md shadow-emerald-600/20"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Backup Snapshot Now</span>
+              </button>
+            </div>
+          </div>
+
+          {backupMsg && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>{backupMsg}</span>
+            </div>
+          )}
+
+          {/* Import JSON File */}
+          <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
+            <h4 className="font-bold text-xs text-gray-800 dark:text-gray-200 mb-1">Restore from External JSON Backup File (Super Admin)</h4>
+            <p className="text-[11px] text-gray-500 mb-3">Upload a valid `.json` database snapshot file to restore full system records.</p>
+            <label className="cursor-pointer inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-xs font-bold text-gray-900 dark:text-white">
+              <Upload className="w-4 h-4 text-purple-500" />
+              <span>Select Backup File (.json)</span>
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                      try {
+                        const parsed = JSON.parse(evt.target?.result as string);
+                        if (confirm('Are you sure you want to restore the system state from this backup file? Current state will be overwritten.')) {
+                          const success = restoreBackupSnapshot(parsed);
+                          if (success) {
+                            alert('Database state restored successfully!');
+                            window.location.reload();
+                          } else {
+                            alert('Failed to parse or restore backup file structure.');
+                          }
+                        }
+                      } catch (err) {
+                        alert('Invalid JSON backup file format.');
+                      }
+                    };
+                    reader.readAsText(file);
+                  }
+                }}
+              />
+            </label>
+          </div>
+
+          {/* Backup Snapshots History */}
+          <div className="space-y-3">
+            <h4 className="font-bold text-xs uppercase text-gray-400">Available Backup History ({backups.length})</h4>
+            {backups.length === 0 ? (
+              <div className="p-6 text-center text-xs text-gray-500">
+                No backup snapshots found. Click "Create Backup Snapshot Now" to create your first daily backup.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200 dark:divide-gray-800 border rounded-xl overflow-hidden border-gray-200 dark:border-gray-800">
+                {backups.map((bkp) => (
+                  <div key={bkp.id} className="p-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <div>
+                      <p className="font-bold text-xs font-mono text-gray-900 dark:text-white">{bkp.id}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        Created: {new Date(bkp.createdAt).toLocaleString()} | By: <span className="font-bold">{bkp.createdBy}</span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => {
+                          const blob = new Blob([JSON.stringify(bkp, null, 2)], { type: 'application/json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${bkp.id}.json`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-[11px] font-bold flex items-center space-x-1"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download JSON</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (confirm(`Super Admin Restoration: Restore database to backup snapshot [${bkp.id}]?`)) {
+                            const success = restoreBackupSnapshot(bkp);
+                            if (success) {
+                              alert('Database restored successfully!');
+                              window.location.reload();
+                            }
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-[11px] font-bold flex items-center space-x-1 shadow-sm"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Restore Snapshot</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

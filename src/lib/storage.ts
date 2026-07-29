@@ -87,9 +87,12 @@ function getStorage<T>(key: string, defaultValue: T): T {
   }
 }
 
+import { notifyDataChange } from './syncEngine';
+
 function setStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    notifyDataChange(key);
   } catch (err) {
     console.error(`Error saving ${key} to storage:`, err);
   }
