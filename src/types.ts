@@ -49,15 +49,25 @@ export interface MenuItem {
   minStockAlert?: number;
 }
 
-export type TableStatus = 'Available' | 'Occupied' | 'Reserved' | 'Cleaning';
+export type TableStatus = 'Available' | 'Occupied' | 'Reserved' | 'Cleaning' | 'Out of Service';
 
 export interface Table {
   id: string;
-  tableNumber: string; // e.g., "T-01"
+  tableNumber: string; // e.g., "T-01" or "1"
+  tableName?: string; // Optional e.g., "VIP Corner Booth"
+  tableTag: string; // Unique Table Tag e.g. "TB-001"
   capacity: number;
+  location?: string; // Indoor, Outdoor, VIP, Poolside, Terrace, Garden, Bar, etc.
+  qrCode?: string; // Optional QR code value or URL
+  description?: string;
   status: TableStatus;
+  active?: boolean; // Active / Deactivated
   currentOrderId?: string;
   assignedWaiterId?: string;
+  createdAt?: string; // ISO date string
+  updatedAt?: string; // ISO date string
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface Waiter {
@@ -378,7 +388,7 @@ export interface AuditLog {
   userRole: string;
   userEmail: string;
   action: string;
-  category: 'Auth' | 'User Management' | 'Inventory' | 'Sales' | 'System' | 'Reports';
+  category: 'Auth' | 'User Management' | 'Inventory' | 'Sales' | 'System' | 'Reports' | 'Tables';
   details: string;
   timestamp: string;
   ipAddress?: string;

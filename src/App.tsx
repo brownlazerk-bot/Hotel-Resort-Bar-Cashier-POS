@@ -599,6 +599,55 @@ export default function App() {
     }
   };
 
+  const handleSaveTable = (table: Table) => {
+    const exists = tables.some(t => t.id === table.id);
+    let updatedTables: Table[];
+    if (exists) {
+      updatedTables = tables.map(t => t.id === table.id ? table : t);
+    } else {
+      updatedTables = [...tables, table];
+    }
+    updateTablesState(updatedTables);
+    addAuditLog({
+      userId: currentUser?.id || 'sys',
+      userName: currentUser?.fullName || 'Manager',
+      userRole: currentUser?.role || 'Admin',
+      userEmail: currentUser?.email || '',
+      action: exists ? 'Update Table' : 'Create Table',
+      category: 'Tables',
+      details: `${exists ? 'Updated' : 'Created'} Table ${table.tableNumber} (${table.tableTag})`
+    });
+  };
+
+  const handleDeleteTable = (tableId: string) => {
+    const tableToDelete = tables.find(t => t.id === tableId);
+    if (!tableToDelete) return;
+
+    // Active order check
+    const hasActiveOrders = orders.some(o => 
+      (o.tableId === tableId || o.tableNumber === tableToDelete.tableNumber) && 
+      o.status !== 'Paid' && 
+      o.status !== 'Cancelled'
+    );
+
+    if (hasActiveOrders) {
+      alert('This table has active orders and cannot be deleted.');
+      return;
+    }
+
+    const updatedTables = tables.filter(t => t.id !== tableId);
+    updateTablesState(updatedTables);
+    addAuditLog({
+      userId: currentUser?.id || 'sys',
+      userName: currentUser?.fullName || 'Manager',
+      userRole: currentUser?.role || 'Admin',
+      userEmail: currentUser?.email || '',
+      action: 'Delete Table',
+      category: 'Tables',
+      details: `Deleted Table ${tableToDelete.tableNumber} (${tableToDelete.tableTag})`
+    });
+  };
+
   const handleResetData = () => {
     if (confirm('Are you sure you want to reset all data?')) {
       resetAllDataToDefault();
@@ -710,6 +759,10 @@ export default function App() {
             orders={orders}
             onUpdateTableStatus={handleUpdateTableStatus}
             onOpenTableOrder={handleOpenTableOrder}
+            onSaveTable={handleSaveTable}
+            onDeleteTable={handleDeleteTable}
+            currentUser={currentUser}
+            userRole={userRole}
             darkMode={darkMode}
           />
         )}
