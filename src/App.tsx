@@ -40,6 +40,7 @@ import { AuditLogView } from './components/AuditLogView';
 import { ProductServiceManager } from './components/ProductServiceManager';
 import { subscribeToSync, createDailyBackup, flushOfflineQueue } from './lib/syncEngine';
 import { startServerSyncPolling, pullServerState } from './lib/serverSync';
+import { startSupabaseSyncPolling, pullAllFromSupabase } from './lib/supabaseSync';
 import { WifiOff, RefreshCw, Bell } from 'lucide-react';
 import { formatCurrency } from './lib/currency';
 
@@ -108,8 +109,14 @@ export default function App() {
     // Start central Express server polling (syncs HP, Dell, Phone, etc.)
     const stopServerPolling = startServerSyncPolling(3000);
 
-    // Initial pull from server
+    // Start Supabase Cloud polling if configured
+    const stopSupabasePolling = startSupabaseSyncPolling(4000);
+
+    // Initial pull from central server & Supabase
     pullServerState().then(() => {
+      refreshAllStateFromStorage();
+    });
+    pullAllFromSupabase().then(() => {
       refreshAllStateFromStorage();
     });
 
@@ -118,6 +125,7 @@ export default function App() {
       setIsOnline(true);
       flushOfflineQueue();
       pullServerState().then(() => refreshAllStateFromStorage());
+      pullAllFromSupabase().then(() => refreshAllStateFromStorage());
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -129,6 +137,7 @@ export default function App() {
     return () => {
       unsubscribeSync();
       stopServerPolling();
+      stopSupabasePolling();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };

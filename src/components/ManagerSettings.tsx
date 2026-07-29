@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, Plus, Edit, Trash2, Users, Shield, 
-  RotateCcw, Save, Wine, UserCheck, AlertCircle, Database, Download, Upload, CheckCircle2
+  RotateCcw, Save, Wine, UserCheck, AlertCircle, Database, Download, Upload, CheckCircle2,
+  Cloud, CloudLightning, Copy, RefreshCw, Key, Globe, Check
 } from 'lucide-react';
 import { MenuItem, Waiter, Category, ItemStatus } from '../types';
 import { createDailyBackup, loadBackups, restoreBackupSnapshot, DatabaseBackup } from '../lib/syncEngine';
+import { 
+  getSupabaseConfig, saveSupabaseConfig, testSupabaseConnection, 
+  pushAllToSupabase, pullAllFromSupabase, SUPABASE_SQL_SCHEMA, SupabaseConfig 
+} from '../lib/supabaseSync';
 
 interface ManagerSettingsProps {
   menuItems: MenuItem[];
@@ -25,9 +30,65 @@ export const ManagerSettings: React.FC<ManagerSettingsProps> = ({
   onResetData,
   darkMode
 }) => {
-  const [activeTab, setActiveTab] = useState<'menu' | 'waiters' | 'security' | 'backups'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'waiters' | 'security' | 'backups' | 'supabase'>('menu');
   const [backups, setBackups] = useState<DatabaseBackup[]>([]);
   const [backupMsg, setBackupMsg] = useState<string>('');
+
+  // Supabase Configuration State
+  const [sbUrl, setSbUrl] = useState('');
+  const [sbKey, setSbKey] = useState('');
+  const [sbEnabled, setSbEnabled] = useState(false);
+  const [sbTestResult, setSbTestResult] = useState<{ success?: boolean; message?: string }>({});
+  const [isTestingSb, setIsTestingSb] = useState(false);
+  const [isSyncingSb, setIsSyncingSb] = useState(false);
+  const [sbSyncMsg, setSbSyncMsg] = useState('');
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  useEffect(() => {
+    const config = getSupabaseConfig();
+    setSbUrl(config.url || '');
+    setSbKey(config.anonKey || '');
+    setSbEnabled(config.enabled || false);
+  }, []);
+
+  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    const config: SupabaseConfig = {
+      url: sbUrl.trim(),
+      anonKey: sbKey.trim(),
+      enabled: sbEnabled
+    };
+    saveSupabaseConfig(config);
+    setSbSyncMsg('Supabase credentials saved successfully! Cloud Sync is active.');
+    setTimeout(() => setSbSyncMsg(''), 4000);
+  };
+
+  const handleTestSupabase = async () => {
+    setIsTestingSb(true);
+    setSbTestResult({});
+    const res = await testSupabaseConnection(sbUrl.trim(), sbKey.trim());
+    setSbTestResult(res);
+    setIsTestingSb(false);
+  };
+
+  const handlePushSupabase = async () => {
+    setIsSyncingSb(true);
+    setSbSyncMsg('');
+    const res = await pushAllToSupabase();
+    setSbSyncMsg(res.message);
+    setIsSyncingSb(false);
+  };
+
+  const handlePullSupabase = async () => {
+    setIsSyncingSb(true);
+    setSbSyncMsg('');
+    const res = await pullAllFromSupabase();
+    setSbSyncMsg(res.message);
+    setIsSyncingSb(false);
+    if (res.success && res.count > 0) {
+      setTimeout(() => window.location.reload(), 1500);
+    }
+  };
 
   // Menu Item Modal state
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -160,7 +221,7 @@ export const ManagerSettings: React.FC<ManagerSettingsProps> = ({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {['menu', 'waiters', 'security', 'backups'].map((tab) => (
+            {['menu', 'waiters', 'security', 'backups', 'supabase'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => {
@@ -177,7 +238,7 @@ export const ManagerSettings: React.FC<ManagerSettingsProps> = ({
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {tab === 'menu' ? 'Menu Catalog' : tab === 'waiters' ? 'Waiters Roster' : tab === 'security' ? 'Security' : 'Daily Backups'}
+                {tab === 'menu' ? 'Menu Catalog' : tab === 'waiters' ? 'Waiters Roster' : tab === 'security' ? 'Security' : tab === 'backups' ? 'Daily Backups' : '☁️ Supabase Sync'}
               </button>
             ))}
           </div>
@@ -448,6 +509,191 @@ export const ManagerSettings: React.FC<ManagerSettingsProps> = ({
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* SUPABASE CLOUD SYNC TAB */}
+      {activeTab === 'supabase' && (
+        <div className={`p-6 rounded-2xl border space-y-6 transition-colors ${
+          darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+        }`}>
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-200 dark:border-gray-800">
+            <div>
+              <div className="flex items-center space-x-2 text-sky-500">
+                <Cloud className="w-6 h-6" />
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white">Supabase Cloud Database Synchronization</h3>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Connect your Supabase project to automatically sync all accounts, orders, menu items, waiters, tables, and reports across every device (laptops, phones, tablets) wherever you log in.
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center space-x-1.5 ${
+                sbEnabled 
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' 
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${sbEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                <span>{sbEnabled ? 'Cloud Sync Active' : 'Local Standalone Mode'}</span>
+              </span>
+            </div>
+          </div>
+
+          {sbSyncMsg && (
+            <div className="p-4 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-800 dark:text-sky-200 text-xs font-bold flex items-center space-x-2">
+              <CheckCircle2 className="w-5 h-5 text-sky-500 shrink-0" />
+              <span>{sbSyncMsg}</span>
+            </div>
+          )}
+
+          {/* Credentials Form */}
+          <form onSubmit={handleSaveSupabaseConfig} className="p-5 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/60 space-y-4">
+            <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center space-x-2">
+              <Key className="w-4 h-4 text-sky-500" />
+              <span>Supabase API Credentials & Configuration</span>
+            </h4>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Supabase Project URL (VITE_SUPABASE_URL)
+                </label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                  <input
+                    type="url"
+                    required
+                    value={sbUrl}
+                    onChange={(e) => setSbUrl(e.target.value)}
+                    placeholder="https://xyzcompany.supabase.co"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl text-xs font-mono border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Supabase Anon Public API Key (VITE_SUPABASE_ANON_KEY)
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={sbKey}
+                  onChange={(e) => setSbKey(e.target.value)}
+                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  className="w-full px-3 py-2 rounded-xl text-xs font-mono border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="enable_supabase"
+                  checked={sbEnabled}
+                  onChange={(e) => setSbEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500"
+                />
+                <label htmlFor="enable_supabase" className="text-xs font-bold text-gray-800 dark:text-gray-200 cursor-pointer">
+                  Enable Real-Time Multi-Device Supabase Cloud Synchronization
+                </label>
+              </div>
+            </div>
+
+            {/* Test Connection Output */}
+            {sbTestResult.message && (
+              <div className={`p-3 rounded-xl text-xs font-medium border flex items-center space-x-2 ${
+                sbTestResult.success 
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' 
+                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+              }`}>
+                {sbTestResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />}
+                <span>{sbTestResult.message}</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleTestSupabase}
+                disabled={isTestingSb || !sbUrl || !sbKey}
+                className="px-4 py-2 rounded-xl bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 text-gray-800 dark:text-gray-200 text-xs font-bold flex items-center space-x-1.5 disabled:opacity-50"
+              >
+                {isTestingSb ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-sky-500" />
+                ) : (
+                  <CloudLightning className="w-3.5 h-3.5 text-sky-500" />
+                )}
+                <span>Test Supabase Connection</span>
+              </button>
+
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-md shadow-sky-600/20"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Save Supabase Settings</span>
+              </button>
+            </div>
+          </form>
+
+          {/* Sync Actions Card */}
+          <div className="p-5 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3">
+            <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center space-x-2">
+              <RefreshCw className="w-4 h-4 text-sky-500" />
+              <span>Manual Multi-Device Cloud Actions</span>
+            </h4>
+            <p className="text-xs text-gray-500">
+              Push all current orders, menu items, waiters, tables, and users to Supabase, or pull cloud state to sync this device.
+            </p>
+
+            <div className="flex flex-wrap gap-3 pt-1">
+              <button
+                onClick={handlePushSupabase}
+                disabled={isSyncingSb || !sbEnabled}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center space-x-2 shadow-md shadow-emerald-600/20 disabled:opacity-50"
+              >
+                <Upload className="w-4 h-4" />
+                <span>{isSyncingSb ? 'Syncing...' : 'Push Local Data to Supabase'}</span>
+              </button>
+
+              <button
+                onClick={handlePullSupabase}
+                disabled={isSyncingSb || !sbEnabled}
+                className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center space-x-2 shadow-md shadow-purple-600/20 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                <span>{isSyncingSb ? 'Pulling...' : 'Pull Cloud Data from Supabase'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* SQL Setup Helper */}
+          <div className="p-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-slate-900 text-slate-100 space-y-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <h4 className="font-bold text-xs text-amber-400 uppercase tracking-wider">1-Click Supabase Table Schema</h4>
+                <p className="text-[11px] text-slate-400">Copy & paste this SQL into your Supabase project's SQL Editor to create the cloud database table.</p>
+              </div>
+
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+                  setCopiedSql(true);
+                  setTimeout(() => setCopiedSql(false), 2000);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center space-x-1.5 border border-slate-700"
+              >
+                {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
+                <span>{copiedSql ? 'Copied!' : 'Copy SQL Snippet'}</span>
+              </button>
+            </div>
+
+            <pre className="p-3.5 rounded-xl bg-slate-950 text-[11px] font-mono text-emerald-400 overflow-x-auto border border-slate-800">
+              {SUPABASE_SQL_SCHEMA}
+            </pre>
           </div>
         </div>
       )}

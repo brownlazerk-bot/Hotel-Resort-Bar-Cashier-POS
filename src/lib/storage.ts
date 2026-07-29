@@ -89,6 +89,7 @@ function getStorage<T>(key: string, defaultValue: T): T {
 
 import { notifyDataChange } from './syncEngine';
 import { pushKeyToServer } from './serverSync';
+import { getSupabaseClient } from './supabaseSync';
 
 const LOCAL_TO_SERVER_KEY: Record<string, string> = {
   [KEYS.MENU_ITEMS]: 'menuItems',
@@ -116,6 +117,18 @@ function setStorage<T>(key: string, value: T): void {
     const serverKey = LOCAL_TO_SERVER_KEY[key];
     if (serverKey) {
       pushKeyToServer(serverKey, value);
+
+      // Also auto-push to Supabase Cloud if configured
+      const client = getSupabaseClient();
+      if (client) {
+        Promise.resolve(
+          client.from('hotel_store').upsert([{
+            key: serverKey,
+            data: value,
+            updated_at: new Date().toISOString()
+          }], { onConflict: 'key' })
+        ).catch(() => {});
+      }
     }
   } catch (err) {
     console.error(`Error saving ${key} to storage:`, err);
