@@ -32,7 +32,14 @@ export function getSupabaseConfig(): SupabaseConfig {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed && typeof parsed === 'object') {
-        return parsed;
+        const isUrlValid = Boolean(parsed.url && typeof parsed.url === 'string' && parsed.url.startsWith('http') && !parsed.url.includes('xyzcompany'));
+        const isKeyValid = Boolean(parsed.anonKey && typeof parsed.anonKey === 'string' && parsed.anonKey.length > 10);
+
+        return {
+          url: parsed.url || '',
+          anonKey: parsed.anonKey || '',
+          enabled: Boolean(parsed.enabled && isUrlValid && isKeyValid)
+        };
       }
     }
   } catch (err) {
@@ -43,10 +50,13 @@ export function getSupabaseConfig(): SupabaseConfig {
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
   const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
 
+  const isEnvUrlValid = Boolean(envUrl && typeof envUrl === 'string' && envUrl.startsWith('http') && !envUrl.includes('xyzcompany'));
+  const isEnvKeyValid = Boolean(envKey && typeof envKey === 'string' && envKey.length > 10);
+
   return {
     url: envUrl,
     anonKey: envKey,
-    enabled: Boolean(envUrl && envKey)
+    enabled: Boolean(isEnvUrlValid && isEnvKeyValid)
   };
 }
 
@@ -174,7 +184,7 @@ export async function pushAllToSupabase(): Promise<{ success: boolean; message: 
 
     return { success: true, message: 'All local data successfully synchronized to Supabase Cloud!' };
   } catch (err: any) {
-    console.error('[Supabase Push Error]:', err);
+    console.warn('[Supabase Push Note]:', err?.message || err);
     return { success: false, message: err?.message || 'Error pushing to Supabase.' };
   }
 }
@@ -192,7 +202,8 @@ export async function pullAllFromSupabase(): Promise<{ success: boolean; count: 
     const { data, error } = await client.from('hotel_store').select('*');
 
     if (error) {
-      throw error;
+      console.warn('[Supabase Pull Note]:', error.message || error);
+      return { success: false, count: 0, message: error.message || 'Error pulling from Supabase.' };
     }
 
     if (!data || data.length === 0) {
@@ -222,7 +233,7 @@ export async function pullAllFromSupabase(): Promise<{ success: boolean; count: 
       message: `Successfully pulled ${updatedCount} updated datasets from Supabase Cloud.` 
     };
   } catch (err: any) {
-    console.error('[Supabase Pull Error]:', err);
+    console.warn('[Supabase Pull Note]:', err?.message || err);
     return { success: false, count: 0, message: err?.message || 'Error pulling from Supabase.' };
   }
 }

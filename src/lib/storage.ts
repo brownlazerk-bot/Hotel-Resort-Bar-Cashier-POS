@@ -316,7 +316,7 @@ export function addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): void {
     id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     timestamp: new Date().toISOString()
   };
-  setStorage(KEYS.AUDIT_LOGS, [newLog, ...logs].slice(0, 500)); // Keep last 500 logs
+  setStorage(KEYS.AUDIT_LOGS, [newLog, ...logs].slice(0, 10000)); // Keep up to 10000 detailed logs
 }
 
 // Session Functions

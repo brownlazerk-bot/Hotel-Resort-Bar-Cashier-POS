@@ -1148,7 +1148,11 @@ export default function App() {
           <StockManagement
             menuItems={menuItems}
             stockLogs={stockLogs}
+            orders={orders}
+            tables={tables}
+            waiters={waiters}
             onUpdateStock={handleUpdateStock}
+            onNavigateToOrders={() => setActiveTab('order_center')}
             darkMode={darkMode}
           />
         )}
