@@ -103,6 +103,10 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
     o => o.paymentStatus === 'PAID' || o.status === 'Paid'
   );
 
+  const pendingOrders = filteredOrders.filter(
+    o => o.paymentStatus !== 'PAID' && o.status !== 'Paid' && o.status !== 'Cancelled'
+  );
+
   const creditOrders = orders.filter(
     o => o.paymentStatus === 'CREDIT' || o.status === 'Credit' || (o.balance > 0 && o.paymentStatus === 'PARTIALLY PAID')
   );
@@ -111,6 +115,9 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const discounts = paidOrders.reduce((sum, o) => sum + o.discount, 0);
   const taxes = paidOrders.reduce((sum, o) => sum + o.tax, 0);
   const netSalesRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
+
+  // Pending / Unpaid Orders financial totals
+  const pendingOrdersTotalValue = pendingOrders.reduce((sum, o) => sum + o.total, 0);
 
   // Credit metrics
   const totalOutstandingCredit = creditOrders.reduce((sum, o) => sum + (o.balance > 0 ? o.balance : o.total - o.amountPaid), 0);
@@ -145,11 +152,17 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
     }
   });
 
-  // Departmental revenue breakdown
-  let barDrinkRevenue = 0;
-  let drinksSoldQty = 0;
-  let kitchenFoodRevenue = 0;
-  let foodOrdersCount = 0;
+  // Departmental & Product Item Sales breakdown (Paid vs Pending vs Total)
+  let barDrinkRevenuePaid = 0;
+  let barDrinkRevenuePending = 0;
+  let drinksSoldQtyPaid = 0;
+  let drinksSoldQtyPending = 0;
+
+  let kitchenFoodRevenuePaid = 0;
+  let kitchenFoodRevenuePending = 0;
+  let foodOrdersCountPaid = 0;
+  let foodOrdersCountPending = 0;
+
   let poolRevenue = 0;
   let poolPassesCount = 0;
   let saunaRevenue = 0;
@@ -157,33 +170,75 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   let roomRevenue = 0;
   let apartmentRevenue = 0;
 
-  const drinkSalesMap: { [name: string]: { qty: number; revenue: number } } = {};
+  const drinkSalesMap: { 
+    [name: string]: { 
+      qtyPaid: number; 
+      qtyPending: number; 
+      qtyTotal: number; 
+      revenuePaid: number; 
+      revenuePending: number; 
+      revenueTotal: number;
+    } 
+  } = {};
 
-  paidOrders.forEach((o) => {
+  filteredOrders.forEach((o) => {
+    const isPaid = o.paymentStatus === 'PAID' || o.status === 'Paid';
     let orderHasFood = false;
+
     o.items.forEach((item) => {
+      const itemRev = item.totalPrice;
+      const itemQty = item.quantity;
+
       if (item.category === 'Food' || item.isFood) {
-        kitchenFoodRevenue += item.totalPrice;
+        if (isPaid) {
+          kitchenFoodRevenuePaid += itemRev;
+        } else {
+          kitchenFoodRevenuePending += itemRev;
+        }
         orderHasFood = true;
       } else if (item.category === 'Pool Services') {
-        poolRevenue += item.totalPrice;
-        poolPassesCount += item.quantity;
+        poolRevenue += itemRev;
+        poolPassesCount += itemQty;
       } else if (item.category === 'Sauna Services') {
-        saunaRevenue += item.totalPrice;
-        saunaSessionsCount += item.quantity;
+        saunaRevenue += itemRev;
+        saunaSessionsCount += itemQty;
       } else {
-        barDrinkRevenue += item.totalPrice;
-        drinksSoldQty += item.quantity;
+        // Bar Drink
+        if (isPaid) {
+          barDrinkRevenuePaid += itemRev;
+          drinksSoldQtyPaid += itemQty;
+        } else {
+          barDrinkRevenuePending += itemRev;
+          drinksSoldQtyPending += itemQty;
+        }
 
         if (!drinkSalesMap[item.name]) {
-          drinkSalesMap[item.name] = { qty: 0, revenue: 0 };
+          drinkSalesMap[item.name] = { 
+            qtyPaid: 0, 
+            qtyPending: 0, 
+            qtyTotal: 0, 
+            revenuePaid: 0, 
+            revenuePending: 0, 
+            revenueTotal: 0 
+          };
         }
-        drinkSalesMap[item.name].qty += item.quantity;
-        drinkSalesMap[item.name].revenue += item.totalPrice;
+
+        if (isPaid) {
+          drinkSalesMap[item.name].qtyPaid += itemQty;
+          drinkSalesMap[item.name].revenuePaid += itemRev;
+        } else {
+          drinkSalesMap[item.name].qtyPending += itemQty;
+          drinkSalesMap[item.name].revenuePending += itemRev;
+        }
+        drinkSalesMap[item.name].qtyTotal += itemQty;
+        drinkSalesMap[item.name].revenueTotal += itemRev;
       }
     });
 
-    if (orderHasFood) foodOrdersCount++;
+    if (orderHasFood) {
+      if (isPaid) foodOrdersCountPaid++;
+      else foodOrdersCountPending++;
+    }
 
     if (o.servicesIncluded?.includes('Rooms') || o.paymentMethod === 'Room Charge') {
       roomRevenue += o.total;
@@ -194,8 +249,16 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   });
 
   const bestSellingDrinks = Object.entries(drinkSalesMap)
-    .map(([name, data]) => ({ name, qty: data.qty, revenue: data.revenue }))
-    .sort((a, b) => b.revenue - a.revenue);
+    .map(([name, data]) => ({ 
+      name, 
+      qtyPaid: data.qtyPaid,
+      qtyPending: data.qtyPending,
+      qtyTotal: data.qtyTotal,
+      revenuePaid: data.revenuePaid,
+      revenuePending: data.revenuePending,
+      revenueTotal: data.revenueTotal
+    }))
+    .sort((a, b) => b.qtyTotal - a.qtyTotal);
 
   // Helper for Order Descriptions
   const getOrderDescription = (order: Order): string => {
@@ -339,13 +402,13 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
         date: selectedDate,
         generatedAt: new Date().toISOString(),
         cashierName: currentShift?.cashierName || 'Bar Cashier',
-        totalDrinkSales: barDrinkRevenue,
-        drinksSoldQty,
-        bestSellingDrinks,
+        totalDrinkSales: barDrinkRevenuePaid + barDrinkRevenuePending,
+        drinksSoldQty: drinksSoldQtyPaid + drinksSoldQtyPending,
+        bestSellingDrinks: bestSellingDrinks.map(d => ({ name: d.name, qty: d.qtyTotal, revenue: d.revenueTotal })),
         currentStockValue: menuItems.reduce((s, i) => s + (i.price * i.stockQuantity), 0),
         lowStockItemsCount: menuItems.filter(i => i.stockQuantity <= 5).length,
-        totalFoodOrders: foodOrdersCount,
-        foodRevenue: kitchenFoodRevenue,
+        totalFoodOrders: foodOrdersCountPaid + foodOrdersCountPending,
+        foodRevenue: kitchenFoodRevenuePaid + kitchenFoodRevenuePending,
         poolRevenue,
         poolVisitorsCount: poolPassesCount,
         saunaRevenue,
@@ -427,13 +490,13 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
         date: selectedDate,
         generatedAt: new Date().toISOString(),
         cashierName: currentShift?.cashierName || 'Bar Cashier',
-        totalDrinkSales: barDrinkRevenue,
-        drinksSoldQty,
-        bestSellingDrinks,
+        totalDrinkSales: barDrinkRevenuePaid + barDrinkRevenuePending,
+        drinksSoldQty: drinksSoldQtyPaid + drinksSoldQtyPending,
+        bestSellingDrinks: bestSellingDrinks.map(d => ({ name: d.name, qty: d.qtyTotal, revenue: d.revenueTotal })),
         currentStockValue: menuItems.reduce((s, i) => s + (i.price * i.stockQuantity), 0),
         lowStockItemsCount: menuItems.filter(i => i.stockQuantity <= 5).length,
-        totalFoodOrders: foodOrdersCount,
-        foodRevenue: kitchenFoodRevenue,
+        totalFoodOrders: foodOrdersCountPaid + foodOrdersCountPending,
+        foodRevenue: kitchenFoodRevenuePaid + kitchenFoodRevenuePending,
         poolRevenue,
         poolVisitorsCount: poolPassesCount,
         saunaRevenue,
@@ -625,20 +688,24 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-bold text-gray-500 uppercase">Bar (Drinks)</span>
+                <span className="text-xs font-bold text-gray-500 uppercase">Bar (Drinks Dispatched)</span>
                 <Wine className="w-4 h-4 text-amber-500" />
               </div>
-              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(barDrinkRevenue)}</p>
-              <p className="text-[10px] text-gray-400">{drinksSoldQty} units sold</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(barDrinkRevenuePaid + barDrinkRevenuePending)}</p>
+              <p className="text-[10px] text-gray-400">
+                {drinksSoldQtyPaid + drinksSoldQtyPending} units ({drinksSoldQtyPaid} Paid, {drinksSoldQtyPending} Pending)
+              </p>
             </div>
 
             <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-bold text-gray-500 uppercase">Kitchen (Food)</span>
+                <span className="text-xs font-bold text-gray-500 uppercase">Kitchen (Food Sales)</span>
                 <ChefHat className="w-4 h-4 text-orange-500" />
               </div>
-              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(kitchenFoodRevenue)}</p>
-              <p className="text-[10px] text-gray-400">{foodOrdersCount} food orders</p>
+              <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(kitchenFoodRevenuePaid + kitchenFoodRevenuePending)}</p>
+              <p className="text-[10px] text-gray-400">
+                {foodOrdersCountPaid + foodOrdersCountPending} food orders ({foodOrdersCountPaid} Paid, {foodOrdersCountPending} Pending)
+              </p>
             </div>
 
             <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
@@ -787,13 +854,46 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
       {/* ------------------- TAB 2: BAR & KITCHEN DETAILED REPORT ------------------- */}
       {activeTab === 'bar' && (
         <div className="space-y-6">
+          
+          {/* Top KPI Cards for Bar Stock Movement */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Dispatched Drinks</span>
+              <span className="text-xl font-black text-amber-500 mt-1 block">{drinksSoldQtyPaid + drinksSoldQtyPending} units</span>
+              <span className="text-[10px] text-gray-500">{drinksSoldQtyPaid} Paid + {drinksSoldQtyPending} Pending in Open Tables</span>
+            </div>
+
+            <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Drink Value Dispatched</span>
+              <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{formatCurrency(barDrinkRevenuePaid + barDrinkRevenuePending)}</span>
+              <span className="text-[10px] text-gray-500">{formatCurrency(barDrinkRevenuePaid)} Paid / {formatCurrency(barDrinkRevenuePending)} Pending</span>
+            </div>
+
+            <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Kitchen Food Orders</span>
+              <span className="text-xl font-black text-orange-500 mt-1 block">{foodOrdersCountPaid + foodOrdersCountPending} Orders</span>
+              <span className="text-[10px] text-gray-500">{foodOrdersCountPaid} Paid + {foodOrdersCountPending} Pending</span>
+            </div>
+
+            <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Food Revenue</span>
+              <span className="text-xl font-black text-orange-600 dark:text-orange-400 mt-1 block">{formatCurrency(kitchenFoodRevenuePaid + kitchenFoodRevenuePending)}</span>
+              <span className="text-[10px] text-gray-500">{formatCurrency(kitchenFoodRevenuePaid)} Paid / {formatCurrency(kitchenFoodRevenuePending)} Pending</span>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* Top Selling Drinks */}
+            {/* Top Selling & Dispatched Drinks Breakdown */}
             <div className={`p-6 rounded-2xl border ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-              <div className="flex items-center space-x-2 mb-4">
-                <Wine className="w-5 h-5 text-amber-500" />
-                <h3 className="font-bold text-lg text-gray-900 dark:text-white">Top Selling Drinks</h3>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Wine className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Drink Item Sales & Stock Dispatched</h3>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  Paid + Pending Included
+                </span>
               </div>
 
               <div className="space-y-3">
@@ -801,19 +901,29 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
                   <p className="text-xs text-gray-400 py-4 text-center">No drink sales recorded for {selectedDate}.</p>
                 ) : (
                   bestSellingDrinks.map((item, idx) => (
-                    <div key={item.name} className="flex justify-between items-center p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60">
+                    <div key={item.name} className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center space-x-3">
-                        <span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center justify-center">
+                        <span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center justify-center shrink-0">
                           #{idx + 1}
                         </span>
                         <div>
                           <p className="font-bold text-xs text-gray-900 dark:text-white">{item.name}</p>
-                          <p className="text-[10px] text-gray-400">{item.qty} units sold</p>
+                          <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                            <span className="font-medium text-emerald-600 dark:text-emerald-400">{item.qtyPaid} Paid</span>
+                            <span>•</span>
+                            <span className="font-medium text-amber-600 dark:text-amber-400">{item.qtyPending} Pending</span>
+                          </div>
                         </div>
                       </div>
-                      <span className="font-black text-xs text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(item.revenue)}
-                      </span>
+
+                      <div className="text-right">
+                        <span className="font-black text-xs text-slate-900 dark:text-white block">
+                          {item.qtyTotal} units dispatched
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(item.revenueTotal)}
+                        </span>
+                      </div>
                     </div>
                   ))
                 )}
@@ -829,17 +939,19 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
 
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Food Orders</p>
-                  <p className="text-xl font-black text-gray-900 dark:text-white mt-1">{foodOrdersCount}</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase">Paid Food Revenue</p>
+                  <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-1">{formatCurrency(kitchenFoodRevenuePaid)}</p>
+                  <p className="text-[10px] text-gray-400">{foodOrdersCountPaid} Orders Paid</p>
                 </div>
                 <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Food Revenue</p>
-                  <p className="text-xl font-black text-orange-600 dark:text-orange-400 mt-1">{formatCurrency(kitchenFoodRevenue)}</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase">Pending Food Orders</p>
+                  <p className="text-lg font-black text-amber-600 dark:text-amber-400 mt-1">{formatCurrency(kitchenFoodRevenuePending)}</p>
+                  <p className="text-[10px] text-gray-400">{foodOrdersCountPending} Orders Open</p>
                 </div>
               </div>
 
               <p className="text-xs text-gray-500">
-                Kitchen tickets are automatically routed to the kitchen display screen and tracked upon completion.
+                Kitchen tickets are automatically routed to the kitchen display screen and tracked upon completion. Pending orders are accounted for in total stock dispatch.
               </p>
             </div>
           </div>

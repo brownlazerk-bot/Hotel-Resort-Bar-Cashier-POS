@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { 
   PackageCheck, AlertTriangle, Plus, Minus, Trash2, 
   Search, RefreshCw, FileText, ArrowUpRight, ArrowDownRight, History,
-  Clock, ShoppingBag, Eye, ExternalLink, ShieldAlert, CheckCircle2, AlertCircle, Layers
+  Clock, ShoppingBag, Eye, ExternalLink, ShieldAlert, CheckCircle2, AlertCircle, Layers,
+  Calendar, Download, ArrowRight
 } from 'lucide-react';
 import { MenuItem, StockAdjustmentLog, Order, Table, Waiter } from '../types';
 import { formatCurrency } from '../lib/currency';
+import { calculateStockMovementsForDate, ItemStockMovement } from '../lib/stockMovement';
 
 interface StockManagementProps {
   menuItems: MenuItem[];
@@ -28,9 +30,12 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   onNavigateToOrders,
   darkMode
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'available' | 'unpaid_reserved' | 'logs'>('available');
+  const [activeSubTab, setActiveSubTab] = useState<'available' | 'unpaid_reserved' | 'reconciliation' | 'logs'>('available');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [reconciliationDate, setReconciliationDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  );
   
   // Stock Intake/Adjustment Modal
   const [selectedItemForModal, setSelectedItemForModal] = useState<MenuItem | null>(null);
@@ -248,6 +253,18 @@ export const StockManagement: React.FC<StockManagementProps> = ({
               {reservedItemsList.length}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('reconciliation')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeSubTab === 'reconciliation'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+          <span>Raporo y'Ububiko / Daily Stock Balance Sheet</span>
         </button>
 
         <button
@@ -495,7 +512,196 @@ export const StockManagement: React.FC<StockManagementProps> = ({
         </div>
       )}
 
-      {/* VIEW 3: STOCK AUDIT TRAIL & LOGS */}
+      {/* VIEW 3: DAILY STOCK BALANCE SHEET & RECONCILIATION */}
+      {activeSubTab === 'reconciliation' && (
+        <div className="space-y-6">
+          <div className={`p-6 rounded-2xl border transition-colors ${
+            darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          }`}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-5 h-5 text-emerald-500" />
+                  <h3 className="font-bold text-base text-gray-900 dark:text-white">
+                    Daily Stock Movement & Reconciliation Sheet
+                  </h3>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Raporo y'Ububiko: Ububiko bwa Mbere (Previous Closing), Ibyinjiye (Restocked), Ibyasohotse (Sold/Dispatched), n'Ububiko Busigaye.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <span className="text-xs font-bold text-gray-500 pl-2">Date:</span>
+                  <input
+                    type="date"
+                    value={reconciliationDate}
+                    onChange={(e) => setReconciliationDate(e.target.value)}
+                    className="px-2 py-1 text-xs font-bold bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    const stockMovements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
+                    const filtered = stockMovements.filter(m => (selectedCategory === 'All' || m.category === selectedCategory) && m.itemName.toLowerCase().includes(searchQuery.toLowerCase()));
+                    const headers = ['Item Name', 'Category', 'Opening Stock', 'Added Stock', 'Dispatched Stock (Paid+Pending)', 'Closing Stock', 'Current Stock', 'Dispatched Value (RWF)'];
+                    const rows = filtered.map(m => [
+                      `"${m.itemName}"`,
+                      `"${m.category}"`,
+                      m.openingStock,
+                      m.addedStock,
+                      m.dispatchedStock,
+                      m.closingStock,
+                      m.currentStock,
+                      m.dispatchedValue
+                    ]);
+                    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', encodedUri);
+                    link.setAttribute('download', `Stock_Balance_${reconciliationDate}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center space-x-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Reconciliation KPI Summary Cards */}
+            {(() => {
+              const movements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
+              const filtered = movements.filter(m => (selectedCategory === 'All' || m.category === selectedCategory) && m.itemName.toLowerCase().includes(searchQuery.toLowerCase()));
+              const totOpening = filtered.reduce((sum, m) => sum + m.openingStock, 0);
+              const totAdded = filtered.reduce((sum, m) => sum + m.addedStock, 0);
+              const totDispatched = filtered.reduce((sum, m) => sum + m.dispatchedStock, 0);
+              const totClosing = filtered.reduce((sum, m) => sum + m.closingStock, 0);
+              const totValue = filtered.reduce((sum, m) => sum + m.dispatchedValue, 0);
+
+              return (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                        Ububiko bwa Mbere (Opening Stock)
+                      </span>
+                      <span className="text-xl font-black text-slate-900 dark:text-white mt-1 block">
+                        {totOpening} units
+                      </span>
+                      <span className="text-[10px] text-gray-500">Stock balance at start of {reconciliationDate}</span>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider block">
+                        + Ibyinjiye (Added / Restocked)
+                      </span>
+                      <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
+                        +{totAdded} units
+                      </span>
+                      <span className="text-[10px] text-gray-500">Restocks & adjustments on date</span>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block">
+                        - Ibyasohotse (Dispatched / Sold)
+                      </span>
+                      <span className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1 block">
+                        -{totDispatched} units
+                      </span>
+                      <span className="text-[10px] text-gray-500">Value: {formatCurrency(totValue)}</span>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      <span className="text-[10px] font-bold text-sky-500 uppercase tracking-wider block">
+                        = Ububiko Busigaye (Closing Stock)
+                      </span>
+                      <span className="text-xl font-black text-sky-600 dark:text-sky-400 mt-1 block">
+                        {totClosing} units
+                      </span>
+                      <span className="text-[10px] text-gray-500">Remaining stock at end of date</span>
+                    </div>
+                  </div>
+
+                  {/* Stock Reconciliation Table */}
+                  <div className="overflow-x-auto border border-gray-200 dark:border-gray-800 rounded-xl">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-100 dark:bg-gray-800/80 uppercase text-[10px] font-bold text-gray-500">
+                        <tr>
+                          <th className="py-3 px-3">Item / Product Name</th>
+                          <th className="py-3 px-3">Category</th>
+                          <th className="py-3 px-3 text-center bg-gray-200/50 dark:bg-gray-700/50 text-slate-900 dark:text-white">
+                            Ububiko bwa Mbere (Opening)
+                          </th>
+                          <th className="py-3 px-3 text-center bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                            + Ibyinjiye (Added)
+                          </th>
+                          <th className="py-3 px-3 text-center bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                            - Ibyasohotse (Dispatched)
+                          </th>
+                          <th className="py-3 px-3 text-center bg-sky-500/10 text-sky-700 dark:text-sky-300 font-black">
+                            = Ububiko Busigaye (Closing)
+                          </th>
+                          <th className="py-3 px-3 text-right">Dispatched Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-medium">
+                        {filtered.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-gray-400">
+                              No items found for category "{selectedCategory}".
+                            </td>
+                          </tr>
+                        ) : (
+                          filtered.map(m => (
+                            <tr key={m.itemId} className="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                              <td className="py-3 px-3 font-bold text-gray-900 dark:text-white">
+                                {m.itemName}
+                              </td>
+                              <td className="py-3 px-3 text-gray-500">
+                                <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px]">
+                                  {m.category}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center font-bold font-mono text-gray-800 dark:text-gray-200 bg-gray-50/50 dark:bg-gray-800/30">
+                                {m.openingStock} {m.unit}s
+                              </td>
+                              <td className="py-3 px-3 text-center font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/5">
+                                {m.addedStock > 0 ? `+${m.addedStock}` : 0}
+                              </td>
+                              <td className="py-3 px-3 text-center font-bold font-mono text-amber-600 dark:text-amber-400 bg-amber-500/5">
+                                {m.dispatchedStock}
+                                {m.pendingQty > 0 && (
+                                  <span className="block text-[9px] text-amber-500 font-normal">
+                                    ({m.paidQty} Paid + {m.pendingQty} Open)
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-center font-black font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 text-sm">
+                                {m.closingStock}
+                              </td>
+                              <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                                {formatCurrency(m.dispatchedValue)}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 4: STOCK AUDIT TRAIL & LOGS */}
       {activeSubTab === 'logs' && (
         <div className={`p-6 rounded-2xl border transition-colors ${
           darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'

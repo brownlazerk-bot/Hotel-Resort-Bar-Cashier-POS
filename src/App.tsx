@@ -1172,6 +1172,7 @@ export default function App() {
           <DailyReportView
             orders={orders}
             menuItems={menuItems}
+            stockLogs={stockLogs}
             currentShift={currentShift}
             allShifts={shifts}
             guestRooms={guestRooms}
