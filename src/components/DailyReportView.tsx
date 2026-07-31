@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { 
   Order, MenuItem, Shift, DailyReportData, Expense, CashMovement, 
-  DailyClosingRecord, GuestRoom, AppUser, ExpenseDepartment, PaymentMethod 
+  DailyClosingRecord, GuestRoom, AppUser, ExpenseDepartment, PaymentMethod,
+  StockAdjustmentLog
 } from '../types';
 import { 
   printReportHTML, exportDailyReportPDF, exportDailyReportExcel,
@@ -16,9 +17,12 @@ import {
 } from '../lib/exporter';
 import { formatCurrency } from '../lib/currency';
 
+import { Language, getTranslation } from '../lib/translations';
+
 interface DailyReportViewProps {
   orders: Order[];
   menuItems: MenuItem[];
+  stockLogs?: StockAdjustmentLog[];
   currentShift: Shift | null;
   allShifts?: Shift[];
   guestRooms?: GuestRoom[];
@@ -31,6 +35,7 @@ interface DailyReportViewProps {
   onUpdateOrder?: (updatedOrder: Order) => void;
   onUpdateDailyClosing?: (closings: DailyClosingRecord[]) => void;
   darkMode: boolean;
+  language?: Language;
 }
 
 type ReportTab = 'summary' | 'bar' | 'credit' | 'expense' | 'cash_movement' | 'daily_closing';
@@ -38,6 +43,7 @@ type ReportTab = 'summary' | 'bar' | 'credit' | 'expense' | 'cash_movement' | 'd
 export const DailyReportView: React.FC<DailyReportViewProps> = ({
   orders,
   menuItems,
+  stockLogs = [],
   currentShift,
   allShifts = [],
   guestRooms = [],
@@ -49,7 +55,8 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   onAddCashMovement,
   onUpdateOrder,
   onUpdateDailyClosing,
-  darkMode
+  darkMode,
+  language = 'rw'
 }) => {
   const [activeTab, setActiveTab] = useState<ReportTab>('summary');
   const [selectedDate, setSelectedDate] = useState<string>(

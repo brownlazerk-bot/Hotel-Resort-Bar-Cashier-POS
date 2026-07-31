@@ -5,6 +5,7 @@ import {
   Package
 } from 'lucide-react';
 import { UserRole } from '../types';
+import { Language, getTranslation } from '../lib/translations';
 
 export type TabType = 
   | 'dashboard' 
@@ -29,6 +30,7 @@ interface NavigationProps {
   lowStockCount: number;
   userRole: UserRole;
   darkMode: boolean;
+  language?: Language;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -38,42 +40,44 @@ export const Navigation: React.FC<NavigationProps> = ({
   unpaidOrdersCount = 0,
   lowStockCount,
   userRole,
-  darkMode
+  darkMode,
+  language = 'rw'
 }) => {
   const isManagerOrAdmin = userRole === 'Manager' || userRole === 'Super Admin';
+  const t = getTranslation(language);
 
   const navItems = [
-    { id: 'dashboard' as TabType, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'dashboard' as TabType, label: t.dashboard, icon: LayoutDashboard },
     { 
       id: 'order_center' as TabType, 
-      label: 'Order Center', 
+      label: t.orderCenter, 
       icon: Receipt,
       badge: unpaidOrdersCount > 0 ? unpaidOrdersCount : null,
       badgeColor: 'bg-amber-500 text-white'
     },
-    { id: 'pos' as TabType, label: 'Take Order (POS)', icon: ShoppingCart },
-    { id: 'tables' as TabType, label: 'Tables', icon: UtensilsCrossed },
+    { id: 'pos' as TabType, label: t.pos, icon: ShoppingCart },
+    { id: 'tables' as TabType, label: t.tables, icon: UtensilsCrossed },
     { 
       id: 'kitchen' as TabType, 
-      label: 'Kitchen Orders', 
+      label: t.kitchen, 
       icon: ChefHat, 
       badge: pendingKitchenCount > 0 ? pendingKitchenCount : null,
       badgeColor: 'bg-rose-500 text-white'
     },
-    { id: 'pool_sauna' as TabType, label: 'Pool & Sauna', icon: Waves },
+    { id: 'pool_sauna' as TabType, label: t.poolSauna, icon: Waves },
     { 
       id: 'stock' as TabType, 
-      label: 'Bar Stock', 
+      label: t.barStock, 
       icon: PackageCheck,
       badge: lowStockCount > 0 ? lowStockCount : null,
       badgeColor: 'bg-amber-500 text-white'
     },
-    { id: 'shifts' as TabType, label: 'Shift Register', icon: ReceiptText },
-    { id: 'report' as TabType, label: 'Daily Report', icon: FileBarChart },
-    { id: 'products_services' as TabType, label: 'Products & Services', icon: Package, managerOnly: true },
-    { id: 'users' as TabType, label: 'User Admin', icon: Users, managerOnly: true },
-    { id: 'audit_logs' as TabType, label: 'Audit Logs', icon: ShieldCheck, managerOnly: true },
-    { id: 'settings' as TabType, label: 'Staff & Menu', icon: Settings, managerOnly: true },
+    { id: 'shifts' as TabType, label: t.shifts, icon: ReceiptText },
+    { id: 'report' as TabType, label: t.dailyReport, icon: FileBarChart },
+    { id: 'products_services' as TabType, label: t.productsServices, icon: Package, managerOnly: true },
+    { id: 'users' as TabType, label: t.userAdmin, icon: Users, managerOnly: true },
+    { id: 'audit_logs' as TabType, label: t.auditLogs, icon: ShieldCheck, managerOnly: true },
+    { id: 'settings' as TabType, label: t.settings, icon: Settings, managerOnly: true },
   ];
 
   return (

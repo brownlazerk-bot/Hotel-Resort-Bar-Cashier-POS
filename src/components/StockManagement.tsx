@@ -9,6 +9,8 @@ import { MenuItem, StockAdjustmentLog, Order, Table, Waiter } from '../types';
 import { formatCurrency } from '../lib/currency';
 import { calculateStockMovementsForDate, ItemStockMovement } from '../lib/stockMovement';
 
+import { Language, getTranslation } from '../lib/translations';
+
 interface StockManagementProps {
   menuItems: MenuItem[];
   stockLogs: StockAdjustmentLog[];
@@ -18,6 +20,7 @@ interface StockManagementProps {
   onUpdateStock: (itemId: string, qtyChange: number, type: StockAdjustmentLog['type'], reason: string) => void;
   onNavigateToOrders?: () => void;
   darkMode: boolean;
+  language?: Language;
 }
 
 export const StockManagement: React.FC<StockManagementProps> = ({
@@ -28,7 +31,8 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   waiters = [],
   onUpdateStock,
   onNavigateToOrders,
-  darkMode
+  darkMode,
+  language = 'rw'
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'available' | 'unpaid_reserved' | 'reconciliation' | 'logs'>('available');
   const [searchQuery, setSearchQuery] = useState<string>('');

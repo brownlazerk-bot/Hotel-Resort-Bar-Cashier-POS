@@ -44,8 +44,11 @@ import { startSupabaseSyncPolling, pullAllFromSupabase } from './lib/supabaseSyn
 import { WifiOff, RefreshCw, Bell } from 'lucide-react';
 import { formatCurrency } from './lib/currency';
 
+import { Language } from './lib/translations';
+
 export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
+  const [language, setLanguage] = useState<Language>('rw');
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [userRole, setUserRole] = useState<UserRole>('Cashier');
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -1017,6 +1020,8 @@ export default function App() {
         onLogout={handleLogout}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        language={language}
+        setLanguage={setLanguage}
         lowStockCount={lowStockCount}
         openShiftModal={() => setActiveTab('shifts')}
         onNavigateToStock={() => setActiveTab('stock')}
@@ -1031,6 +1036,7 @@ export default function App() {
         lowStockCount={lowStockCount}
         userRole={userRole}
         darkMode={darkMode}
+        language={language}
       />
 
       {/* Primary Module Workspace */}
@@ -1154,6 +1160,7 @@ export default function App() {
             onUpdateStock={handleUpdateStock}
             onNavigateToOrders={() => setActiveTab('order_center')}
             darkMode={darkMode}
+            language={language}
           />
         )}
 
@@ -1185,6 +1192,7 @@ export default function App() {
             onUpdateOrder={handleUpdateOrder}
             onUpdateDailyClosing={(updatedClosings) => updateDailyClosingsState(updatedClosings)}
             darkMode={darkMode}
+            language={language}
           />
         )}
 

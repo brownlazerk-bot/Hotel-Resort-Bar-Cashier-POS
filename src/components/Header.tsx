@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Wine, Shield, UserCheck, Clock, Moon, Sun, 
-  AlertTriangle, DollarSign, Key, LogOut, Lock, User
+  AlertTriangle, DollarSign, Key, LogOut, Lock, User, Globe
 } from 'lucide-react';
 import { Shift, UserRole, AppUser } from '../types';
 import { formatCurrency } from '../lib/currency';
+import { Language } from '../lib/translations';
 
 interface HeaderProps {
   currentShift: Shift | null;
@@ -14,6 +15,8 @@ interface HeaderProps {
   onLogout?: () => void;
   darkMode: boolean;
   setDarkMode: (val: boolean) => void;
+  language?: Language;
+  setLanguage?: (lang: Language) => void;
   lowStockCount: number;
   openShiftModal: () => void;
   onNavigateToStock: () => void;
@@ -27,6 +30,8 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   darkMode,
   setDarkMode,
+  language = 'rw',
+  setLanguage,
   lowStockCount,
   openShiftModal,
   onNavigateToStock
@@ -125,6 +130,18 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
 
+
+              {/* Language Selector */}
+              {setLanguage && (
+                <button
+                  onClick={() => setLanguage(language === 'rw' ? 'en' : 'rw')}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-all cursor-pointer"
+                  title="Guhindura Ururimi / Switch Language"
+                >
+                  <Globe className="w-4 h-4 text-amber-500" />
+                  <span>{language === 'rw' ? 'Kinyarwanda 🇷🇼' : 'English 🇬🇧'}</span>
+                </button>
+              )}
 
               {/* Theme Toggle */}
               <button
