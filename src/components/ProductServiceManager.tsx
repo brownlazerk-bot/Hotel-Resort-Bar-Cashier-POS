@@ -47,7 +47,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
   const [formStock, setFormStock] = useState<string>('50');
   const [formUnit, setFormUnit] = useState<string>('Bottle');
   const [formPrepTime, setFormPrepTime] = useState<string>('15 mins');
-  const [formTax, setFormTax] = useState<string>('18');
   const [formActive, setFormActive] = useState<boolean>(true);
   const [formImage, setFormImage] = useState<string>('');
   const [formDescription, setFormDescription] = useState<string>('');
@@ -123,7 +122,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.beer,
-        tax: 18,
         description: 'Cold Rwandan Primus beer 500ml'
       },
       {
@@ -140,7 +138,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.beer,
-        tax: 18,
         description: 'Mützig premium lager 500ml'
       },
       {
@@ -157,7 +154,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.beer,
-        tax: 18,
         description: 'Imported Heineken bottle 330ml'
       },
       {
@@ -174,7 +170,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.beer,
-        tax: 18,
         description: 'Dark malt beer Turbo King'
       },
       {
@@ -191,7 +186,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.soda,
-        tax: 18,
         description: 'Cold Fanta Orange 300ml'
       },
       {
@@ -208,7 +202,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.soda,
-        tax: 18,
         description: 'Refreshing Sprite 300ml'
       },
       {
@@ -225,7 +218,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=300&auto=format&fit=crop&q=80',
-        tax: 0,
         description: 'Pure bottled natural spring water'
       },
       {
@@ -242,7 +234,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?w=300&auto=format&fit=crop&q=80',
-        tax: 18,
         description: 'House-made fresh passion fruit juice'
       },
       {
@@ -259,7 +250,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.wine,
-        tax: 18,
         description: 'Imported Cabernet Sauvignon red wine'
       },
       {
@@ -276,7 +266,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.whisky,
-        tax: 18,
         description: 'Glenfiddich 12yr Scotch Whisky'
       },
       {
@@ -293,7 +282,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.cocktail,
-        tax: 18,
         description: 'Fresh mint, lime, rum, soda'
       },
 
@@ -315,7 +303,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         isFood: true,
         prepTime: '25 mins',
         image: presetImages.chicken,
-        tax: 18,
         description: 'Half spiced grilled chicken served with salad'
       },
       {
@@ -335,7 +322,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         isFood: true,
         prepTime: '20 mins',
         image: presetImages.food,
-        tax: 18,
         description: 'Steamed fragrant jasmine rice with stewed chicken'
       },
       {
@@ -355,7 +341,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         isFood: true,
         prepTime: '15 mins',
         image: presetImages.food,
-        tax: 18,
         description: 'Tender marinated beef skewer with onions'
       },
       {
@@ -375,7 +360,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         isFood: true,
         prepTime: '30 mins',
         image: presetImages.food,
-        tax: 18,
         description: 'Fresh Lake Kivu tilapia whole fried with fries'
       },
       {
@@ -395,7 +379,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         isFood: true,
         prepTime: '10 mins',
         image: presetImages.food,
-        tax: 18,
         description: 'Chapati rolled with 2 fried eggs, cabbage & tomato'
       },
       {
@@ -415,7 +398,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         isFood: true,
         prepTime: '12 mins',
         image: presetImages.food,
-        tax: 18,
         description: 'Golden fried potato chips'
       },
       {
@@ -435,7 +417,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         isFood: true,
         prepTime: '15 mins',
         image: presetImages.food,
-        tax: 18,
         description: 'Aromatic seasoned rice cooked with cubed beef'
       },
 
@@ -454,7 +435,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.pool,
-        tax: 18,
         description: 'Full day adult pass for Olympic resort pool & towel'
       },
       {
@@ -471,7 +451,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.pool,
-        tax: 18,
         description: 'Full day kids pool access for children under 12 yrs'
       },
       {
@@ -488,7 +467,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.pool,
-        tax: 18,
         description: 'VIP cabana lounger, pool entry, and 1 fresh juice'
       },
       {
@@ -505,7 +483,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.pool,
-        tax: 18,
         description: 'Family pool passes for 2 adults and 2 children'
       },
       {
@@ -522,7 +499,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.pool,
-        tax: 18,
         description: 'Private 1-on-1 swim instruction with certified lifeguard'
       },
 
@@ -541,7 +517,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.sauna,
-        tax: 18,
         description: '30-minute relaxation in dry cedar wood sauna'
       },
       {
@@ -558,7 +533,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.sauna,
-        tax: 18,
         description: '60-minute hot stone sauna access with herb steam'
       },
       {
@@ -575,7 +549,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.sauna,
-        tax: 18,
         description: 'Private sauna cabin, eucalyptus steam, and herbal tea'
       },
       {
@@ -592,7 +565,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.sauna,
-        tax: 18,
         description: '45-min therapeutic massage plus 15-min steam bath'
       },
 
@@ -611,7 +583,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.laundry,
-        tax: 18,
         description: 'Same-day washing, drying and pressing per bag'
       },
       {
@@ -628,7 +599,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.food,
-        tax: 18,
         description: 'Delivered hot breakfast platter, coffee, and fresh juice'
       },
       {
@@ -645,7 +615,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.room,
-        tax: 0,
         description: 'Private air-conditioned car transfer from/to airport'
       },
       {
@@ -662,7 +631,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.room,
-        tax: 18,
         description: 'Additional comfortable guest mattress setup in room'
       },
 
@@ -681,7 +649,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.cleaning,
-        tax: 18,
         description: 'Complete housekeeping, linen refresh, and kitchen clean'
       },
       {
@@ -698,7 +665,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
         status: 'Available',
         active: true,
         image: presetImages.laundry,
-        tax: 18,
         description: 'Full basket washing and folding for apartment guests'
       }
     ];
@@ -770,7 +736,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
       setFormStock(item.stockQuantity.toString());
       setFormUnit(item.unit || 'Bottle');
       setFormPrepTime(item.prepTime || '15 mins');
-      setFormTax(item.tax !== undefined ? item.tax.toString() : '18');
       setFormActive(item.active !== false);
       setFormImage(item.image || '');
       setFormDescription(item.description || '');
@@ -788,7 +753,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
       setFormStock(sec === 'Bar Menu' || sec === 'Kitchen Menu' ? '50' : '999');
       setFormUnit(sec === 'Bar Menu' ? 'Bottle' : sec === 'Kitchen Menu' ? 'Portion' : 'Ticket');
       setFormPrepTime('15 mins');
-      setFormTax('18');
       setFormActive(true);
       setFormImage('');
       setFormDescription('');
@@ -830,7 +794,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
       foodCategory: formSection === 'Kitchen Menu' ? formFoodCat : undefined,
       price: priceNum,
       costPrice: !isNaN(costNum) && costNum >= 0 ? costNum : undefined,
-      tax: parseFloat(formTax) || 0,
       stockQuantity: !isNaN(stockNum) ? stockNum : 50,
       unit: formUnit || 'Unit',
       status: (!isNaN(stockNum) && stockNum <= 0) ? 'Out of Stock' : 'Available',
@@ -1233,7 +1196,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
                   <th className="py-3 px-2">Category</th>
                   <th className="py-3 px-2 text-right">Selling Price</th>
                   <th className="py-3 px-2 text-right">Cost Price</th>
-                  <th className="py-3 px-2 text-center">Tax</th>
                   <th className="py-3 px-2 text-center">Status</th>
                   <th className="py-3 px-2 text-center">Actions</th>
                 </tr>
@@ -1272,9 +1234,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
                       </td>
                       <td className="py-3 px-2 text-right text-gray-500">
                         {item.costPrice ? formatCurrency(item.costPrice) : '-'}
-                      </td>
-                      <td className="py-3 px-2 text-center text-gray-500">
-                        {item.tax ? `${item.tax}%` : 'Exempt'}
                       </td>
                       <td className="py-3 px-2 text-center">
                         <button
@@ -1466,8 +1425,8 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
                 </div>
               </div>
 
-              {/* Pricing & Tax */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Pricing */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
                     Selling Price (RWF) *
@@ -1495,20 +1454,6 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
                     onChange={(e) => setFormCostPrice(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl text-xs border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                    Tax (%)
-                  </label>
-                  <select
-                    value={formTax}
-                    onChange={(e) => setFormTax(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl text-xs border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white"
-                  >
-                    <option value="18">18% Standard VAT</option>
-                    <option value="0">0% Tax Exempt</option>
-                  </select>
                 </div>
               </div>
 

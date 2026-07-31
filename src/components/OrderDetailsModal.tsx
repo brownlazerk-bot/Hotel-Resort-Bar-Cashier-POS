@@ -162,10 +162,6 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
             <span>Subtotal</span>
             <span>${order.subtotal.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between text-gray-500">
-            <span>VAT (18%)</span>
-            <span>${order.tax.toFixed(2)}</span>
-          </div>
           {order.discount > 0 && (
             <div className="flex justify-between text-emerald-600 font-bold">
               <span>Discount</span>

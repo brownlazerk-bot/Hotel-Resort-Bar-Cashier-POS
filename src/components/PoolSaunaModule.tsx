@@ -63,7 +63,6 @@ export const PoolSaunaModule: React.FC<PoolSaunaModuleProps> = ({
         }
       ],
       subtotal: totalAmount,
-      tax: 0,
       discount: 0,
       total: totalAmount,
       amountPaid: totalAmount,

@@ -118,9 +118,8 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
     o => o.paymentStatus === 'CREDIT' || o.status === 'Credit' || (o.balance > 0 && o.paymentStatus === 'PARTIALLY PAID')
   );
 
-  const grossRevenue = paidOrders.reduce((sum, o) => sum + o.subtotal + o.tax, 0);
+  const grossRevenue = paidOrders.reduce((sum, o) => sum + o.subtotal, 0);
   const discounts = paidOrders.reduce((sum, o) => sum + o.discount, 0);
-  const taxes = paidOrders.reduce((sum, o) => sum + o.tax, 0);
   const netSalesRevenue = paidOrders.reduce((sum, o) => sum + o.total, 0);
 
   // Pending / Unpaid Orders financial totals
@@ -431,7 +430,6 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
         totalTransactions: paidOrders.length,
         grossRevenue,
         discounts,
-        taxes,
         netRevenue: netSalesRevenue,
         cashCollected,
         cardCollected,
@@ -519,7 +517,6 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
         totalTransactions: paidOrders.length,
         grossRevenue,
         discounts,
-        taxes,
         netRevenue: netSalesRevenue,
         cashCollected,
         cardCollected,

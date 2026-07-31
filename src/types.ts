@@ -36,7 +36,6 @@ export interface MenuItem {
   foodCategory?: string;
   price: number; // Selling price (RWF)
   costPrice?: number; // Cost price (RWF)
-  tax?: number; // Tax percentage e.g. 18% or 0%
   stockQuantity: number;
   unit: string; // e.g. 'Bottle', 'Glass', 'Serving', 'Ticket', 'Cup', 'Shot', 'Portion', 'Pass', 'Hour', 'Service'
   status: ItemStatus;
@@ -172,7 +171,6 @@ export interface Order {
   servicesIncluded: string[]; // e.g., ['Drinks', 'Food', 'Pool', 'Sauna', 'Rooms']
   items: OrderItem[];
   subtotal: number;
-  tax: number;
   discount: number;
   total: number;
   amountPaid: number;
@@ -255,7 +253,6 @@ export interface DailyReportData {
   totalTransactions: number;
   grossRevenue: number;
   discounts: number;
-  taxes: number;
   netRevenue: number;
 
   // Payment Breakdown

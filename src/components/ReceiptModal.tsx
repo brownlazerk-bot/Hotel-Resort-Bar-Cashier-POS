@@ -92,7 +92,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
               GRAND HORIZON RESORT
             </h2>
             <p className="text-[11px] text-gray-600 dark:text-gray-400">BAR & LOUNGE CASHIER</p>
-            <p className="text-[10px] text-gray-500">Tel: +237 670 000 111 | Tax ID: M0821-8839</p>
+            <p className="text-[10px] text-gray-500">Tel: +237 670 000 111</p>
           </div>
 
           <div className="border-t border-b border-dashed border-gray-300 dark:border-gray-700 py-2 my-2 space-y-1 text-[11px]">
@@ -150,18 +150,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
             </div>
           </div>
 
-          {/* Subtotal, Tax, Discount, Total */}
+          {/* Subtotal, Discount, Total */}
           <div className="border-t border-dashed border-gray-300 dark:border-gray-700 pt-2 mt-3 space-y-1 text-[11px]">
             <div className="flex justify-between">
               <span>Subtotal:</span>
               <span>{formatCurrency(order.subtotal)}</span>
             </div>
-            {order.tax > 0 && (
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>VAT Tax (18%):</span>
-                <span>{formatCurrency(order.tax)}</span>
-              </div>
-            )}
             {order.discount > 0 && (
               <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                 <span>Discount Applied:</span>

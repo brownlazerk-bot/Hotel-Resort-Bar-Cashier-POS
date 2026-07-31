@@ -87,10 +87,10 @@ export function exportDailyReportPDF(report: DailyReportData) {
   doc.setFontSize(10);
   const metrics = [
     ['Gross Revenue:', formatCurrency(report.grossRevenue), 'Total Transactions:', `${report.totalTransactions}`],
-    ['Taxes (VAT):', formatCurrency(report.taxes), 'Discounts Applied:', formatCurrency(report.discounts)],
-    ['NET REVENUE:', formatCurrency(report.netRevenue), 'Cash Collected:', formatCurrency(report.cashCollected)],
-    ['Card Collected:', formatCurrency(report.cardCollected), 'Mobile Money:', formatCurrency(report.mobileMoneyCollected)],
-    ['Room/Apt Charges:', formatCurrency(report.outstandingRoomCharges), 'Current Stock Value:', formatCurrency(report.currentStockValue)],
+    ['Discounts Applied:', formatCurrency(report.discounts), 'NET REVENUE:', formatCurrency(report.netRevenue)],
+    ['Cash Collected:', formatCurrency(report.cashCollected), 'Card Collected:', formatCurrency(report.cardCollected)],
+    ['Mobile Money:', formatCurrency(report.mobileMoneyCollected), 'Room/Apt Charges:', formatCurrency(report.outstandingRoomCharges)],
+    ['Current Stock Value:', formatCurrency(report.currentStockValue), '', ''],
   ];
 
   metrics.forEach(([lbl1, val1, lbl2, val2]) => {
@@ -189,7 +189,6 @@ export function exportDailyReportExcel(report: DailyReportData) {
     [],
     ['FINANCIAL SUMMARY METRIC', 'VALUE (RWF)'],
     ['Gross Revenue', report.grossRevenue],
-    ['Taxes (VAT 18%)', report.taxes],
     ['Discounts Applied', report.discounts],
     ['NET REVENUE', report.netRevenue],
     [],

@@ -116,12 +116,9 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
     });
 
     const addedSubtotal = newItems.reduce((s, i) => s + i.totalPrice, 0);
-    const addedTax = addedSubtotal * 0.18;
-    const addedTotal = addedSubtotal + addedTax;
 
     const newSubtotal = order.subtotal + addedSubtotal;
-    const newTax = order.tax + addedTax;
-    const newGrandTotal = Math.max(0, newSubtotal + newTax - (order.discount || 0));
+    const newGrandTotal = Math.max(0, newSubtotal - (order.discount || 0));
     const newBalance = Math.max(0, newGrandTotal - (order.amountPaid || 0));
 
     let newStatus = order.status;
@@ -161,7 +158,6 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
       items: combinedItems,
       servicesIncluded: Array.from(newServices),
       subtotal: newSubtotal,
-      tax: newTax,
       total: newGrandTotal,
       balance: newBalance,
       status: newStatus,

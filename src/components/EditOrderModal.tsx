@@ -56,8 +56,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
 
   // Recalculate Totals
   const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
-  const tax = subtotal * 0.18; // 18% VAT
-  const total = Math.max(0, subtotal + tax - discount);
+  const total = Math.max(0, subtotal - discount);
   const amountPaid = order.amountPaid || 0;
   const balance = Math.max(0, total - amountPaid);
 
@@ -172,7 +171,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
       customerPhone: customerPhone.trim(),
       items: items,
       subtotal: subtotal,
-      tax: tax,
       discount: discount,
       total: total,
       balance: balance,
@@ -443,10 +441,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
             <div className="flex justify-between text-gray-500">
               <span>Subtotal</span>
               <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-gray-500">
-              <span>VAT (18%)</span>
-              <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(tax)}</span>
             </div>
             <div className="flex justify-between items-center text-gray-500 pt-1">
               <span>Discount</span>

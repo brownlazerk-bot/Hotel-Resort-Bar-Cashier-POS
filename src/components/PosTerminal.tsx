@@ -95,8 +95,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
   // Cart Calculations
   const subtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const tax = subtotal * 0.18; // 18% standard VAT
-  const grandTotal = Math.max(0, subtotal + tax - discountAmount);
+  const grandTotal = Math.max(0, subtotal - discountAmount);
 
   // Cart Actions
   const addToCart = (item: MenuItem) => {
@@ -204,7 +203,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       servicesIncluded: Array.from(servicesSet),
       items: cartItems,
       subtotal,
-      tax,
       discount: discountAmount,
       total: grandTotal,
       amountPaid: 0,
@@ -403,7 +401,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       servicesIncluded,
       items: cartItems,
       subtotal,
-      tax,
       discount: discountAmount,
       total: grandTotal,
       amountPaid,
@@ -750,12 +747,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
             
             <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
-            </div>
-
-            <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-              <span>VAT Tax (18%)</span>
-              <span>{formatCurrency(tax)}</span>
+              <span>{formatCurrency(subtotal)}</span>
             </div>
 
             {/* Discount input */}
