@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Order, Table, KitchenTicket, MenuItem, Shift } from '../types';
 import { TabType } from './Navigation';
+import { formatCurrency } from '../lib/currency';
+import { Language, getTranslation } from '../lib/translations';
 
 interface DashboardProps {
   orders: Order[];
@@ -15,6 +17,7 @@ interface DashboardProps {
   currentShift: Shift | null;
   setActiveTab: (tab: TabType) => void;
   darkMode: boolean;
+  language?: Language;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -24,8 +27,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   menuItems,
   currentShift,
   setActiveTab,
-  darkMode
+  darkMode,
+  language = 'rw'
 }) => {
+  const t = getTranslation(language);
+
   // Calculations for Today's Sales
   const todayStr = new Date().toISOString().split('T')[0];
   const todayOrders = orders.filter(o => o.createdAt.startsWith(todayStr) && o.status !== 'Cancelled');
@@ -99,13 +105,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
-              POS OVERVIEW & MONITOR
+              {language === 'rw' ? "IBIKUBIYE MURI SISTEMU" : "POS OVERVIEW & MONITOR"}
             </span>
             <h2 className="text-2xl font-black text-gray-900 dark:text-white mt-1">
-              Bar & Cashier Terminal
+              {language === 'rw' ? "Aka Bati n'Aka Bika (POS)" : "Bar & Cashier Terminal"}
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Real-time synchronization across Bar Sales, Kitchen Bon de Commande, Pool Passes & Room Folios.
+              {language === 'rw' 
+                ? "Gukurikirana ku gihe kimwe ibyacurujwe mu Bati, Bon de Commande mu Gikoni, Pisine n'Ibyumba."
+                : "Real-time synchronization across Bar Sales, Kitchen Bon de Commande, Pool Passes & Room Folios."}
             </p>
           </div>
 
@@ -115,27 +123,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
               className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all cursor-pointer"
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>Order Center</span>
+              <span>{t.orderCenter}</span>
             </button>
             <button
               onClick={() => setActiveTab('pos')}
               className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 hover:bg-amber-200 font-bold text-xs transition-all cursor-pointer"
             >
-              <span>+ Take POS Order</span>
+              <span>+ {t.pos}</span>
             </button>
             <button
               onClick={() => setActiveTab('tables')}
               className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-xs transition-all cursor-pointer"
             >
               <Utensils className="w-4 h-4 text-amber-500" />
-              <span>Tables ({occupiedTables} Busy)</span>
+              <span>{t.tables} ({occupiedTables} {language === 'rw' ? 'Zirimo' : 'Busy'})</span>
             </button>
             <button
               onClick={() => setActiveTab('pool_sauna')}
               className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-800 transition-all cursor-pointer"
             >
               <Waves className="w-4 h-4" />
-              <span>Pool & Sauna</span>
+              <span>{t.poolSauna}</span>
             </button>
           </div>
         </div>
@@ -149,14 +157,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
         }`}>
           <div className="flex items-center justify-between text-gray-500 text-xs font-semibold">
-            <span>Today Revenue</span>
+            <span>{t.todaySales}</span>
             <DollarSign className="w-4 h-4 text-emerald-500" />
           </div>
           <p className="text-xl font-black text-gray-900 dark:text-white mt-2">
-            ${totalTodayRevenue.toFixed(2)}
+            {formatCurrency(totalTodayRevenue)}
           </p>
           <span className="text-[10px] text-emerald-600 font-medium">
-            {todayOrders.length} Today Orders
+            {todayOrders.length} {language === 'rw' ? 'Oda Zakozwe' : 'Today Orders'}
           </span>
         </div>
 
@@ -165,13 +173,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
         }`}>
           <div className="flex items-center justify-between text-gray-500 text-xs font-semibold">
-            <span>Drink Sales</span>
+            <span>{language === 'rw' ? 'Ibyacurujwe mu Bati' : 'Drink Sales'}</span>
             <TrendingUp className="w-4 h-4 text-amber-500" />
           </div>
           <p className="text-xl font-black text-amber-600 dark:text-amber-400 mt-2">
-            ${drinkSales.toFixed(2)}
+            {formatCurrency(drinkSales)}
           </p>
-          <span className="text-[10px] text-gray-500">Auto Stock Deducted</span>
+          <span className="text-[10px] text-gray-500">{language === 'rw' ? 'Ibyasohotse muri Stoke' : 'Auto Stock Deducted'}</span>
         </div>
 
         {/* Food Sales */}
@@ -179,11 +187,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
         }`}>
           <div className="flex items-center justify-between text-gray-500 text-xs font-semibold">
-            <span>Food Sales</span>
+            <span>{language === 'rw' ? 'Ibyacurujwe mu Gikoni' : 'Food Sales'}</span>
             <ChefHat className="w-4 h-4 text-rose-500" />
           </div>
           <p className="text-xl font-black text-rose-600 dark:text-rose-400 mt-2">
-            ${foodSales.toFixed(2)}
+            {formatCurrency(foodSales)}
           </p>
           <span className="text-[10px] text-gray-500">Bon de Commande</span>
         </div>
@@ -193,13 +201,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
         }`}>
           <div className="flex items-center justify-between text-gray-500 text-xs font-semibold">
-            <span>Pool & Sauna</span>
+            <span>{t.poolSauna}</span>
             <Waves className="w-4 h-4 text-blue-500" />
           </div>
           <p className="text-xl font-black text-blue-600 dark:text-blue-400 mt-2">
-            ${(poolSales + saunaSales).toFixed(2)}
+            {formatCurrency(poolSales + saunaSales)}
           </p>
-          <span className="text-[10px] text-gray-500">Pool ${poolSales} | Sauna ${saunaSales}</span>
+          <span className="text-[10px] text-gray-500">Pisine {formatCurrency(poolSales)} | Sawuna {formatCurrency(saunaSales)}</span>
         </div>
 
         {/* Room / Apt Charges */}
@@ -207,13 +215,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
         }`}>
           <div className="flex items-center justify-between text-gray-500 text-xs font-semibold">
-            <span>Room Charges</span>
+            <span>{language === 'rw' ? 'Amatsiko y\'Ibyumba' : 'Room Charges'}</span>
             <Building className="w-4 h-4 text-purple-500" />
           </div>
           <p className="text-xl font-black text-purple-600 dark:text-purple-400 mt-2">
-            ${(roomCharges + apartmentCharges).toFixed(2)}
+            {formatCurrency(roomCharges + apartmentCharges)}
           </p>
-          <span className="text-[10px] text-gray-500">Guest Folio Debits</span>
+          <span className="text-[10px] text-gray-500">{language === 'rw' ? 'Ibyanditswe ku Byumba' : 'Guest Folio Debits'}</span>
         </div>
 
         {/* Tables & Kitchen Monitor */}
@@ -221,17 +229,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
           darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
         }`}>
           <div className="flex items-center justify-between text-gray-500 text-xs font-semibold">
-            <span>Kitchen Status</span>
+            <span>{language === 'rw' ? 'Aka Gikoni' : 'Kitchen Status'}</span>
             <ChefHat className="w-4 h-4 text-orange-500" />
           </div>
           <div className="flex items-center justify-between mt-2">
             <div>
               <span className="text-base font-bold text-amber-600">{pendingKitchen}</span>
-              <p className="text-[9px] text-gray-500">Pending</p>
+              <p className="text-[9px] text-gray-500">{language === 'rw' ? 'Irigutegurwa' : 'Pending'}</p>
             </div>
             <div>
               <span className="text-base font-bold text-emerald-600">{readyKitchen}</span>
-              <p className="text-[9px] text-gray-500">Ready</p>
+              <p className="text-[9px] text-gray-500">{language === 'rw' ? 'Yarangiye' : 'Ready'}</p>
             </div>
           </div>
         </div>
@@ -249,14 +257,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex items-center space-x-2">
               <ChefHat className="w-5 h-5 text-rose-500" />
               <h3 className="font-bold text-base text-gray-900 dark:text-white">
-                Live Kitchen Tickets (Bon de Commande)
+                {language === 'rw' ? 'Oda ziri mu Gikoni (Bon de Commande)' : 'Live Kitchen Tickets (Bon de Commande)'}
               </h3>
             </div>
             <button
               onClick={() => setActiveTab('kitchen')}
               className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center space-x-1"
             >
-              <span>View All</span>
+              <span>{language === 'rw' ? 'Rora Byose' : 'View All'}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -264,7 +272,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {kitchenTickets.filter(k => k.status !== 'Served').length === 0 ? (
             <div className="p-8 text-center border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl">
               <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-60" />
-              <p className="text-xs text-gray-500">No active food orders in kitchen queue.</p>
+              <p className="text-xs text-gray-500">
+                {language === 'rw' ? 'Nta oda y\'ibyo kurya iri mu gikoni ubu.' : 'No active food orders in kitchen queue.'}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -284,7 +294,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         {ticket.tableNumber}
                       </span>
                       <span className="text-[10px] text-gray-500">
-                        Waiter: {ticket.waiterName}
+                        {language === 'rw' ? 'Umukwezi' : 'Waiter'}: {ticket.waiterName}
                       </span>
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-300 mt-1">
@@ -299,7 +309,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         ? 'bg-blue-500 text-white'
                         : 'bg-amber-500 text-white'
                   }`}>
-                    {ticket.status}
+                    {ticket.status === 'Ready' ? (language === 'rw' ? 'YARANGIYE' : 'READY')
+                      : ticket.status === 'Preparing' ? (language === 'rw' ? 'IRIGUTEGURWA' : 'PREPARING')
+                      : (language === 'rw' ? 'ITEGEREJE' : 'PENDING')}
                   </span>
                 </div>
               ))}
@@ -315,14 +327,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex items-center space-x-2">
               <Utensils className="w-5 h-5 text-amber-500" />
               <h3 className="font-bold text-base text-gray-900 dark:text-white">
-                Restaurant Tables Status
+                {language === 'rw' ? 'Uko Ameza Ahagaze' : 'Restaurant Tables Status'}
               </h3>
             </div>
             <button
               onClick={() => setActiveTab('tables')}
               className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center space-x-1"
             >
-              <span>Manage Tables</span>
+              <span>{language === 'rw' ? 'Genzura Ameza' : 'Manage Tables'}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -345,9 +357,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   }`}
                 >
                   <p className="font-bold text-xs">{table.tableNumber}</p>
-                  <p className="text-[10px] opacity-80 mt-0.5">Cap: {table.capacity} Persons</p>
+                  <p className="text-[10px] opacity-80 mt-0.5">
+                    {language === 'rw' ? 'Abantu' : 'Cap'}: {table.capacity}
+                  </p>
                   <span className="inline-block mt-1 px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase bg-black/10">
-                    {table.status}
+                    {table.status === 'Occupied' ? (language === 'rw' ? 'KIRIMO UMUKIRIYA' : 'OCCUPIED')
+                      : table.status === 'Available' ? (language === 'rw' ? 'KIRAHARI' : 'AVAILABLE')
+                      : table.status === 'Reserved' ? (language === 'rw' ? 'CYARAFASHWE' : 'RESERVED')
+                      : (language === 'rw' ? 'ISUKU' : 'CLEANING')}
                   </span>
                 </div>
               );
@@ -366,11 +383,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }`}>
           <h3 className="font-bold text-base text-gray-900 dark:text-white mb-4 flex items-center space-x-2">
             <Flame className="w-5 h-5 text-amber-500" />
-            <span>Top Performing Items Today</span>
+            <span>{language === 'rw' ? 'Ibicuruzwa Byaguzwe Cyane Uru Munsi' : 'Top Performing Items Today'}</span>
           </h3>
 
           {sortedBestsellers.length === 0 ? (
-            <p className="text-xs text-gray-500 italic py-4">No sales recorded yet today.</p>
+            <p className="text-xs text-gray-500 italic py-4">
+              {language === 'rw' ? 'Nta ibyo kumenyesha biragurishwa uyu munsi.' : 'No sales recorded yet today.'}
+            </p>
           ) : (
             <div className="space-y-2">
               {sortedBestsellers.map((item, idx) => (
@@ -385,8 +404,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-xs text-emerald-600 dark:text-emerald-400">${item.revenue.toFixed(2)}</p>
-                    <p className="text-[10px] text-gray-500">{item.qty} units sold</p>
+                    <p className="font-bold text-xs text-emerald-600 dark:text-emerald-400">{formatCurrency(item.revenue)}</p>
+                    <p className="text-[10px] text-gray-500">{item.qty} {language === 'rw' ? 'byaguzwe' : 'units sold'}</p>
                   </div>
                 </div>
               ))}
@@ -401,19 +420,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center space-x-2">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
-              <span>Low Bar Stock Alerts</span>
+              <span>{language === 'rw' ? 'Ibibura Muri Stoke' : 'Low Bar Stock Alerts'}</span>
             </h3>
             <button
               onClick={() => setActiveTab('stock')}
               className="text-xs font-semibold text-amber-600 hover:text-amber-700"
             >
-              Restock Bar
+              {language === 'rw' ? 'Ongeramo Stoke' : 'Restock Bar'}
             </button>
           </div>
 
           {lowStockItems.length === 0 ? (
             <div className="p-6 text-center text-emerald-600 dark:text-emerald-400 text-xs font-medium bg-emerald-50 dark:bg-emerald-950/30 rounded-xl">
-              ✓ All drink & bar stock levels are healthy!
+              ✓ {language === 'rw' ? 'Ibyinyobwa byose n\'ububiko bwa Bati bwakwiriye!' : 'All drink & bar stock levels are healthy!'}
             </div>
           ) : (
             <div className="space-y-2">
@@ -421,11 +440,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div key={item.id} className="flex justify-between items-center p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
                   <div>
                     <p className="font-bold text-xs text-gray-900 dark:text-white">{item.name}</p>
-                    <p className="text-[10px] text-amber-700 dark:text-amber-400">Category: {item.category}</p>
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400">{t.category}: {item.category}</p>
                   </div>
                   <div className="text-right">
                     <span className="px-2 py-0.5 rounded-md font-bold text-xs bg-rose-500 text-white">
-                      {item.stockQuantity} {item.unit}s left
+                      {item.stockQuantity} {item.unit}s {language === 'rw' ? 'bisigaye' : 'left'}
                     </span>
                   </div>
                 </div>
@@ -439,3 +458,4 @@ export const Dashboard: React.FC<DashboardProps> = ({
     </div>
   );
 };
+

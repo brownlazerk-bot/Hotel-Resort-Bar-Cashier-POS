@@ -1081,6 +1081,7 @@ export default function App() {
             currentShift={currentShift}
             setActiveTab={setActiveTab}
             darkMode={darkMode}
+            language={language}
           />
         )}
 
@@ -1114,6 +1115,7 @@ export default function App() {
             darkMode={darkMode}
             currentUser={currentUser}
             openShiftModal={() => setActiveTab('shifts')}
+            language={language}
           />
         )}
 

@@ -11,6 +11,8 @@ import {
 } from '../types';
 import { formatCurrency } from '../lib/currency';
 
+import { Language, getTranslation } from '../lib/translations';
+
 interface PosTerminalProps {
   menuItems: MenuItem[];
   tables: Table[];
@@ -21,6 +23,7 @@ interface PosTerminalProps {
   darkMode: boolean;
   currentUser?: AppUser;
   openShiftModal: () => void;
+  language?: Language;
 }
 
 export const PosTerminal: React.FC<PosTerminalProps> = ({
@@ -32,8 +35,10 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   onOrderCompleted,
   darkMode,
   currentUser,
-  openShiftModal
+  openShiftModal,
+  language = 'rw'
 }) => {
+  const t = getTranslation(language);
   // POS Order Header State
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [selectedWaiterId, setSelectedWaiterId] = useState<string>(waiters[0]?.id || '');
