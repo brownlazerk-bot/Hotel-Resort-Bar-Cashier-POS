@@ -203,11 +203,11 @@ export const StockManagement: React.FC<StockManagementProps> = ({
 
           <div className="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/20">
             <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider block">
-              Total Physical Inventory
+              Total Physical Inventory Stock
             </span>
             <div className="flex items-baseline space-x-1.5 mt-1">
               <span className="text-lg font-black text-sky-700 dark:text-sky-300">
-                {totalAvailableUnits + totalReservedUnits}
+                {totalAvailableUnits}
               </span>
               <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400">units total</span>
             </div>
@@ -550,13 +550,14 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                   onClick={() => {
                     const stockMovements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
                     const filtered = stockMovements.filter(m => (selectedCategory === 'All' || m.category === selectedCategory) && m.itemName.toLowerCase().includes(searchQuery.toLowerCase()));
-                    const headers = ['Item Name', 'Category', 'Opening Stock', 'Added Stock', 'Dispatched Stock (Paid+Pending)', 'Closing Stock', 'Current Stock', 'Dispatched Value (RWF)'];
+                    const headers = ['Item Name', 'Category', 'Opening Stock', 'Received (Stock In)', 'Sold (Stock Out)', 'Adjustments (+/-)', 'Closing Stock', 'Current Stock', 'Sales Value (RWF)'];
                     const rows = filtered.map(m => [
                       `"${m.itemName}"`,
                       `"${m.category}"`,
                       m.openingStock,
-                      m.addedStock,
-                      m.dispatchedStock,
+                      m.receivedStock,
+                      m.soldStock,
+                      m.adjustments,
                       m.closingStock,
                       m.currentStock,
                       m.dispatchedValue
@@ -583,52 +584,63 @@ export const StockManagement: React.FC<StockManagementProps> = ({
               const movements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
               const filtered = movements.filter(m => (selectedCategory === 'All' || m.category === selectedCategory) && m.itemName.toLowerCase().includes(searchQuery.toLowerCase()));
               const totOpening = filtered.reduce((sum, m) => sum + m.openingStock, 0);
-              const totAdded = filtered.reduce((sum, m) => sum + m.addedStock, 0);
-              const totDispatched = filtered.reduce((sum, m) => sum + m.dispatchedStock, 0);
+              const totReceived = filtered.reduce((sum, m) => sum + m.receivedStock, 0);
+              const totSold = filtered.reduce((sum, m) => sum + m.soldStock, 0);
+              const totAdjustments = filtered.reduce((sum, m) => sum + m.adjustments, 0);
               const totClosing = filtered.reduce((sum, m) => sum + m.closingStock, 0);
               const totValue = filtered.reduce((sum, m) => sum + m.dispatchedValue, 0);
 
               return (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                        Ububiko bwa Mbere (Opening Stock)
+                        Ububiko bwa Mbere (Opening)
                       </span>
                       <span className="text-xl font-black text-slate-900 dark:text-white mt-1 block">
                         {totOpening} units
                       </span>
-                      <span className="text-[10px] text-gray-500">Stock balance at start of {reconciliationDate}</span>
+                      <span className="text-[10px] text-gray-500">Start of {reconciliationDate}</span>
                     </div>
 
                     <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                       <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider block">
-                        + Ibyinjiye (Added / Restocked)
+                        + Ibyinjiye (Received / Purchases)
                       </span>
                       <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
-                        +{totAdded} units
+                        +{totReceived} units
                       </span>
-                      <span className="text-[10px] text-gray-500">Restocks & adjustments on date</span>
+                      <span className="text-[10px] text-gray-500">Approved restocks on date</span>
                     </div>
 
                     <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                       <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block">
-                        - Ibyasohotse (Dispatched / Sold)
+                        - Ibyagurishijwe (Sold / Dispatched)
                       </span>
                       <span className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1 block">
-                        -{totDispatched} units
+                        -{totSold} units
                       </span>
                       <span className="text-[10px] text-gray-500">Value: {formatCurrency(totValue)}</span>
                     </div>
 
                     <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      <span className="text-[10px] font-bold text-purple-500 uppercase tracking-wider block">
+                        ± Impinduka (Adjustments)
+                      </span>
+                      <span className={`text-xl font-black mt-1 block ${totAdjustments >= 0 ? 'text-purple-600 dark:text-purple-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        {totAdjustments >= 0 ? `+${totAdjustments}` : totAdjustments} units
+                      </span>
+                      <span className="text-[10px] text-gray-500">Waste/Damaged/Count diffs</span>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border ${darkMode ? 'bg-gray-800/60 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                       <span className="text-[10px] font-bold text-sky-500 uppercase tracking-wider block">
-                        = Ububiko Busigaye (Closing Stock)
+                        = Ububiko Busigaye (Closing)
                       </span>
                       <span className="text-xl font-black text-sky-600 dark:text-sky-400 mt-1 block">
                         {totClosing} units
                       </span>
-                      <span className="text-[10px] text-gray-500">Remaining stock at end of date</span>
+                      <span className="text-[10px] text-gray-500">End of {reconciliationDate}</span>
                     </div>
                   </div>
 
@@ -643,21 +655,24 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                             Ububiko bwa Mbere (Opening)
                           </th>
                           <th className="py-3 px-3 text-center bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-                            + Ibyinjiye (Added)
+                            + Ibyinjiye (Received)
                           </th>
                           <th className="py-3 px-3 text-center bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                            - Ibyasohotse (Dispatched)
+                            - Ibyagurishijwe (Sold)
+                          </th>
+                          <th className="py-3 px-3 text-center bg-purple-500/10 text-purple-700 dark:text-purple-300">
+                            ± Impinduka (Adjustments)
                           </th>
                           <th className="py-3 px-3 text-center bg-sky-500/10 text-sky-700 dark:text-sky-300 font-black">
                             = Ububiko Busigaye (Closing)
                           </th>
-                          <th className="py-3 px-3 text-right">Dispatched Value</th>
+                          <th className="py-3 px-3 text-right">Sales Value</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-medium">
                         {filtered.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="py-8 text-center text-gray-400">
+                            <td colSpan={8} className="py-8 text-center text-gray-400">
                               No items found for category "{selectedCategory}".
                             </td>
                           </tr>
@@ -676,15 +691,20 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                                 {m.openingStock} {m.unit}s
                               </td>
                               <td className="py-3 px-3 text-center font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/5">
-                                {m.addedStock > 0 ? `+${m.addedStock}` : 0}
+                                {m.receivedStock > 0 ? `+${m.receivedStock}` : 0}
                               </td>
                               <td className="py-3 px-3 text-center font-bold font-mono text-amber-600 dark:text-amber-400 bg-amber-500/5">
-                                {m.dispatchedStock}
+                                {m.soldStock}
                                 {m.pendingQty > 0 && (
                                   <span className="block text-[9px] text-amber-500 font-normal">
                                     ({m.paidQty} Paid + {m.pendingQty} Open)
                                   </span>
                                 )}
+                              </td>
+                              <td className="py-3 px-3 text-center font-bold font-mono bg-purple-500/5">
+                                <span className={m.adjustments > 0 ? 'text-purple-600 dark:text-purple-400' : m.adjustments < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-400'}>
+                                  {m.adjustments > 0 ? `+${m.adjustments}` : m.adjustments}
+                                </span>
                               </td>
                               <td className="py-3 px-3 text-center font-black font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 text-sm">
                                 {m.closingStock}

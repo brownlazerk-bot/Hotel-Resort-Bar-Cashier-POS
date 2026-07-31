@@ -6,19 +6,23 @@ export interface ItemStockMovement {
   category: string;
   unit: string;
   price: number;
-  openingStock: number;    // Ububiko bwa mbere (Opening Stock before target date)
-  addedStock: number;      // Ibyinjiye uwo munsi (Stock added/restocked on target date)
-  dispatchedStock: number; // Ibyasohotse / Ibyacurujwe (Dispatched on target date, paid + pending)
-  paidQty: number;         // Paid dispatched qty
-  pendingQty: number;      // Pending dispatched qty in open tables
-  closingStock: number;    // Ububiko busigaye (Closing stock at end of target date)
-  currentStock: number;    // Live stock quantity right now
-  dispatchedValue: number; // Dispatched total value (dispatchedStock * price)
+  openingStock: number;       // Ububiko bwa Mbere (Opening Stock before target date)
+  receivedStock: number;      // Ibyinjiye / Purchases (Stock In on target date)
+  adjustmentsIn: number;      // Stock Adjustments (+)
+  soldStock: number;          // Ibyasohotse / Sales (Dispatched on target date, paid + pending)
+  paidQty: number;            // Paid dispatched qty
+  pendingQty: number;         // Pending dispatched qty in open tables
+  adjustmentsOut: number;     // Stock Adjustments (-) / Waste / Damaged
+  adjustments: number;        // Net adjustments (adjustmentsIn - adjustmentsOut)
+  closingStock: number;       // Ububiko Busigaye (Closing stock at end of target date)
+  currentStock: number;       // Live stock quantity right now
+  dispatchedValue: number;    // Sales total value (soldStock * price)
 }
 
 /**
- * Calculates accurate stock movements (Opening Stock, Stock In, Stock Out, Closing Stock)
- * for any given date string (YYYY-MM-DD).
+ * Calculates accurate stock movements (Opening Stock, Stock In, Stock Out, Adjustments, Closing Stock)
+ * for any given date string (YYYY-MM-DD) using standard ledger formula:
+ * Closing Stock = Opening Stock + Received (Stock In) - Sold (Stock Out) ± Adjustments
  */
 export function calculateStockMovementsForDate(
   menuItems: MenuItem[],
@@ -32,16 +36,23 @@ export function calculateStockMovementsForDate(
   const targetDayEnd = new Date(year, month - 1, day, 23, 59, 59, 999).getTime();
 
   return menuItems.map(item => {
-    let dispatchedAfter = 0;
-    let addedAfter = 0;
+    let salesAfter = 0;
+    let stockInAfter = 0;
+    let stockOutAfter = 0;
 
-    let dispatchedOnDate = 0;
+    let salesOnDate = 0;
     let paidQtyOnDate = 0;
     let pendingQtyOnDate = 0;
 
-    let addedOnDate = 0;
+    let purchasesOnDate = 0;
+    let returnsOnDate = 0;
+    let adjustmentsInOnDate = 0;
 
-    // 1. Calculate order dispatches (Sales / Pending orders)
+    let wasteOnDate = 0;
+    let damagedOnDate = 0;
+    let adjustmentsOutOnDate = 0;
+
+    // 1. Calculate Order Dispatches (Sales / Dispatched Items)
     orders.forEach(order => {
       if (order.status === 'Cancelled') return;
       if (!order.createdAt) return;
@@ -54,9 +65,9 @@ export function calculateStockMovementsForDate(
           const qty = orderItem.quantity || 0;
 
           if (orderTime > targetDayEnd) {
-            dispatchedAfter += qty;
+            salesAfter += qty;
           } else if (orderTime >= targetDayStart && orderTime <= targetDayEnd) {
-            dispatchedOnDate += qty;
+            salesOnDate += qty;
             if (isPaid) {
               paidQtyOnDate += qty;
             } else {
@@ -67,7 +78,7 @@ export function calculateStockMovementsForDate(
       });
     });
 
-    // 2. Calculate stock log adjustments / intakes
+    // 2. Calculate Stock Logs (Purchases, Restocks, Waste, Damaged, Adjustments, Returns)
     stockLogs.forEach(log => {
       if (log.itemId === item.id || (log.itemName && item.name && log.itemName.toLowerCase() === item.name.toLowerCase())) {
         if (!log.timestamp) return;
@@ -75,20 +86,43 @@ export function calculateStockMovementsForDate(
         const change = log.quantityChange || 0;
 
         if (logTime > targetDayEnd) {
-          addedAfter += change;
+          if (log.type === 'Purchase' || log.type === 'Return' || (log.type === 'Adjustment' && change > 0)) {
+            stockInAfter += Math.abs(change);
+          } else if (log.type === 'Waste' || log.type === 'Damaged' || (log.type === 'Adjustment' && change < 0)) {
+            stockOutAfter += Math.abs(change);
+          }
         } else if (logTime >= targetDayStart && logTime <= targetDayEnd) {
-          addedOnDate += change;
+          if (log.type === 'Purchase') {
+            purchasesOnDate += Math.abs(change);
+          } else if (log.type === 'Return') {
+            returnsOnDate += Math.abs(change);
+          } else if (log.type === 'Adjustment') {
+            if (change > 0) adjustmentsInOnDate += change;
+            else adjustmentsOutOnDate += Math.abs(change);
+          } else if (log.type === 'Waste') {
+            wasteOnDate += Math.abs(change);
+          } else if (log.type === 'Damaged') {
+            damagedOnDate += Math.abs(change);
+          }
         }
       }
     });
 
+    const receivedStock = purchasesOnDate + returnsOnDate;
+    const adjustmentsIn = adjustmentsInOnDate;
+    const adjustmentsOut = wasteOnDate + damagedOnDate + adjustmentsOutOnDate;
+    const adjustments = adjustmentsIn - adjustmentsOut;
+
     const currentStock = item.stockQuantity || 0;
 
-    // Closing stock at end of target date
-    const closingStock = currentStock + dispatchedAfter - addedAfter;
+    // Working backward from current live stock to closing stock at target date end
+    const closingStock = currentStock - stockInAfter + salesAfter + stockOutAfter;
 
-    // Opening stock at start of target date (i.e. Closing stock of previous day)
-    const openingStock = closingStock - addedOnDate + dispatchedOnDate;
+    // Opening Stock = Closing Stock - Received (Stock In) + Sold (Stock Out) - Adjustments
+    const stockInOnDate = receivedStock + adjustmentsIn;
+    const stockOutOnDate = salesOnDate + adjustmentsOut;
+
+    const openingStock = closingStock - stockInOnDate + stockOutOnDate;
 
     return {
       itemId: item.id,
@@ -97,13 +131,16 @@ export function calculateStockMovementsForDate(
       unit: item.unit || 'Bottle',
       price: item.price || 0,
       openingStock: Math.max(0, openingStock),
-      addedStock: Math.max(0, addedOnDate),
-      dispatchedStock: Math.max(0, dispatchedOnDate),
+      receivedStock: Math.max(0, receivedStock),
+      adjustmentsIn: Math.max(0, adjustmentsIn),
+      soldStock: Math.max(0, salesOnDate),
       paidQty: paidQtyOnDate,
       pendingQty: pendingQtyOnDate,
+      adjustmentsOut: Math.max(0, adjustmentsOut),
+      adjustments,
       closingStock: Math.max(0, closingStock),
       currentStock,
-      dispatchedValue: Math.max(0, dispatchedOnDate) * (item.price || 0)
+      dispatchedValue: Math.max(0, salesOnDate) * (item.price || 0)
     };
   });
 }
