@@ -9,48 +9,6 @@ interface ReceiptModalProps {
   darkMode: boolean;
 }
 
-// Crisp inline vector QR Code for 80mm thermal printers (Pure Black #000000)
-const ThermalQRCode: React.FC<{ value: string }> = () => {
-  return (
-    <svg 
-      className="w-14 h-14 mx-auto text-black" 
-      viewBox="0 0 29 29" 
-      fill="currentColor"
-      shapeRendering="crispEdges"
-    >
-      <rect x="0" y="0" width="29" height="29" fill="white" />
-      {/* Top-Left Finder */}
-      <rect x="2" y="2" width="7" height="7" fill="black" />
-      <rect x="3" y="3" width="5" height="5" fill="white" />
-      <rect x="4" y="4" width="3" height="3" fill="black" />
-      {/* Top-Right Finder */}
-      <rect x="20" y="2" width="7" height="7" fill="black" />
-      <rect x="21" y="3" width="5" height="5" fill="white" />
-      <rect x="22" y="4" width="3" height="3" fill="black" />
-      {/* Bottom-Left Finder */}
-      <rect x="2" y="20" width="7" height="7" fill="black" />
-      <rect x="3" y="21" width="5" height="5" fill="white" />
-      <rect x="4" y="22" width="3" height="3" fill="black" />
-      {/* Timing and Data Modules */}
-      <rect x="10" y="2" width="8" height="1" fill="black" />
-      <rect x="10" y="4" width="8" height="1" fill="black" />
-      <rect x="2" y="10" width="1" height="8" fill="black" />
-      <rect x="4" y="10" width="1" height="8" fill="black" />
-      <rect x="10" y="10" width="3" height="3" fill="black" />
-      <rect x="14" y="10" width="2" height="2" fill="black" />
-      <rect x="17" y="10" width="3" height="1" fill="black" />
-      <rect x="11" y="14" width="5" height="2" fill="black" />
-      <rect x="18" y="13" width="3" height="3" fill="black" />
-      <rect x="10" y="18" width="2" height="4" fill="black" />
-      <rect x="13" y="20" width="4" height="2" fill="black" />
-      <rect x="18" y="18" width="3" height="3" fill="black" />
-      <rect x="22" y="10" width="4" height="2" fill="black" />
-      <rect x="20" y="14" width="2" height="4" fill="black" />
-      <rect x="23" y="19" width="3" height="3" fill="black" />
-    </svg>
-  );
-};
-
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, darkMode }) => {
   const handlePrint = () => {
     const printContent = document.getElementById('thermal-receipt-printable');
@@ -97,7 +55,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
             .receipt-body {
               width: 76mm;
               margin: 0 auto;
-              padding: 4mm 2mm 15mm 2mm;
+              padding: 4mm 2mm 6mm 2mm;
             }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
@@ -217,17 +175,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
           >
             {/* Header / Business Information */}
             <div className="text-center space-y-0.5 mb-2">
-              {/* Hotel / Business Logo Icon */}
-              <div className="flex justify-center mb-1">
-                <svg className="w-8 h-8 text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 21h18" />
-                  <path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16" />
-                  <path d="M9 7h6" />
-                  <path d="M9 11h6" />
-                  <path d="M9 15h6" />
-                </svg>
-              </div>
-
               <h2 className="font-black text-sm tracking-wider uppercase text-black">
                 SKY VIEW RESORT APARTMENT
               </h2>
@@ -367,13 +314,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
             </div>
 
             {/* Footer Section */}
-            <div className="text-center pt-3 border-t border-dashed border-black mt-3 space-y-1">
+            <div className="text-center pt-2 border-t border-dashed border-black mt-2 space-y-1">
               <p className="text-[10px] font-bold text-black">
                 Served By : {waiterName}
               </p>
-              <div className="my-2">
-                <ThermalQRCode value={receiptNo} />
-              </div>
               <p className="text-[10px] font-black uppercase text-black pt-1">
                 Thank you for visiting Sky View Resort Apartment.
               </p>
