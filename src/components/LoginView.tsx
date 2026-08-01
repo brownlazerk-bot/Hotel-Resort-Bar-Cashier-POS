@@ -250,7 +250,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, darkMode =
               <Hotel className="w-7 h-7" />
             </div>
             <h1 className="text-2xl font-black tracking-tight text-white">
-              Grand Horizon Resort
+              Sky View Resort Apartment
             </h1>
             <p className="text-xs text-slate-400 font-medium mt-1">
               Production POS & Management Authentication Terminal

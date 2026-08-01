@@ -59,7 +59,7 @@ export function exportDailyReportPDF(report: DailyReportData) {
 
   doc.setFont('Helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text('GRAND HORIZON HOTEL & RESORT', 14, 18);
+  doc.text('SKY VIEW RESORT APARTMENT', 14, 18);
   
   doc.setFontSize(14);
   doc.setFont('Helvetica', 'normal');
@@ -181,7 +181,7 @@ export function exportDailyReportExcel(report: DailyReportData) {
 
   // Summary Sheet
   const summaryData = [
-    ['GRAND HORIZON HOTEL & RESORT'],
+    ['SKY VIEW RESORT APARTMENT'],
     ['DAILY BAR & CASHIER FINANCIAL REPORT'],
     [`Report Date`, report.date],
     [`Generated At`, new Date(report.generatedAt).toLocaleString()],
@@ -308,7 +308,7 @@ export function exportGenericPDF(title: string, subtitle: string, headers: strin
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   doc.setFont('Helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text('GRAND HORIZON HOTEL & RESORT', 14, 15);
+  doc.text('SKY VIEW RESORT APARTMENT', 14, 15);
   
   doc.setFontSize(12);
   doc.text(title.toUpperCase(), 14, 22);

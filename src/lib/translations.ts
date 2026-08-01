@@ -94,7 +94,7 @@ const translations: Record<Language, Translations> = {
     settings: "Igenzura ry'Ikirango",
 
     // Header & Status
-    systemTitle: "SISTEMI Y'UBUMWE - GRAND HORIZON",
+    systemTitle: "SISTEMI Y'UBUMWE - SKY VIEW RESORT",
     activeShift: "Shifuti Yafunguwe",
     noActiveShift: "Nta Shifuti Ikora",
     openShift: "Fungura Shifuti",
@@ -169,7 +169,7 @@ const translations: Record<Language, Translations> = {
     settings: "Staff & Menu",
 
     // Header & Status
-    systemTitle: "GRAND HORIZON POS SYSTEM",
+    systemTitle: "SKY VIEW RESORT POS SYSTEM",
     activeShift: "Active Shift",
     noActiveShift: "No Active Shift",
     openShift: "Open Shift",

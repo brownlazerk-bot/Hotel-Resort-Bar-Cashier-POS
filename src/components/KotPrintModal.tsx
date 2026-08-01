@@ -1,7 +1,7 @@
 import React from 'react';
 import { Printer, X, ChefHat } from 'lucide-react';
 import { KitchenTicket } from '../types';
-import { printKotThermalTicket, getStationForCategory } from '../lib/kotPrinter';
+import { printKotThermalTicket } from '../lib/kotPrinter';
 
 interface KotPrintModalProps {
   ticket: KitchenTicket;
@@ -20,20 +20,25 @@ export const KotPrintModal: React.FC<KotPrintModalProps> = ({
     printKotThermalTicket(ticket, ticketType as 'NEW ORDER' | 'UPDATED ORDER' | 'CANCELLED ITEM');
   };
 
-  const totalItemsCount = ticket.items.reduce((sum, item) => sum + item.quantity, 0);
-
-  // Group items by station for UI preview
-  const stationGroups: { [station: string]: typeof ticket.items } = {};
-  ticket.items.forEach(item => {
-    const station = getStationForCategory((item as any).category, item.name);
-    if (!stationGroups[station]) stationGroups[station] = [];
-    stationGroups[station].push(item);
+  const orderDateObj = new Date(ticket.orderTime || Date.now());
+  const timeFormatted = orderDateObj.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
   });
 
-  const orderTimeStr = new Date(ticket.orderTime || Date.now()).toLocaleString('en-GB', {
-    dateStyle: 'short',
-    timeStyle: 'medium'
-  });
+  const tableVal = ticket.tableNumber 
+    ? ticket.tableNumber.toUpperCase() 
+    : 'COUNTER';
+
+  const waiterVal = (ticket.waiterName || 'STAFF').toUpperCase();
+
+  let orderTypeVal = (ticket.orderType || 'DINE IN').toUpperCase();
+  if (!ticket.orderType) {
+    if (tableVal.includes('ROOM')) orderTypeVal = 'ROOM SERVICE';
+    else if (tableVal.includes('POOL')) orderTypeVal = 'POOL SERVICE';
+    else if (tableVal.includes('TAKE')) orderTypeVal = 'TAKE AWAY';
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
@@ -55,112 +60,67 @@ export const KotPrintModal: React.FC<KotPrintModalProps> = ({
           </button>
         </div>
 
-        {/* 80mm High-Contrast Thermal Preview Card */}
+        {/* 80mm High-Contrast Thermal Receipt Preview */}
         <div className="flex justify-center my-2">
           <div 
-            className="w-[300px] bg-white text-black font-mono text-[12px] leading-tight p-4 border-2 border-black rounded-sm shadow-md select-text"
+            className="w-[300px] bg-white text-black font-mono text-[13px] leading-snug p-4 border-2 border-black rounded-sm shadow-md select-text"
             style={{ color: '#000000', backgroundColor: '#ffffff' }}
           >
-            {/* Business Header */}
-            <div className="text-center space-y-0.5 mb-2">
+            {/* Double Border Header */}
+            <div className="border-y-2 border-black py-2 my-1 text-center">
               <h2 className="font-black text-sm uppercase tracking-wider text-black">
-                GRAND HORIZON RESORT
+                SKY VIEW RESORT APARTMENT
               </h2>
-              
-              <div className="border-2 border-black p-1 my-1 text-center font-black text-sm uppercase tracking-wider">
-                KITCHEN ORDER (KOT)
-              </div>
+              <h3 className="font-black text-base uppercase tracking-wider text-black mt-0.5">
+                KITCHEN ORDER {ticketType !== 'NEW ORDER' ? `(${ticketType})` : ''}
+              </h3>
+            </div>
 
-              <div className="inline-block border-2 border-black px-2 py-0.5 font-black text-xs uppercase my-1">
-                *** {ticketType} ***
+            {/* Info Table */}
+            <div className="my-3 space-y-1.5 font-black text-sm">
+              <div className="text-base font-black">
+                TABLE : {tableVal}
+              </div>
+              <div>
+                WAITER : {waiterVal}
+              </div>
+              <div>
+                ORDER : {orderTypeVal}
+              </div>
+              <div>
+                TIME : {timeFormatted}
               </div>
             </div>
 
-            {/* Ticket Info */}
-            <div className="border-t-2 border-b-2 border-black py-2 my-2 space-y-1 text-[11px] font-bold">
-              <div className="flex justify-between">
-                <span>TICKET NO:</span>
-                <span className="font-black">{ticket.id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>ORDER NO:</span>
-                <span className="font-black">{ticket.orderId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>DATE/TIME:</span>
-                <span>{orderTimeStr}</span>
-              </div>
-              <div className="flex justify-between items-baseline">
-                <span>TABLE/ROOM:</span>
-                <span className="font-black text-sm uppercase border-b-2 border-black">
-                  {ticket.tableNumber || 'COUNTER'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>ORDER TYPE:</span>
-                <span className="font-black uppercase">{ticket.orderType || 'DINE IN'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>WAITER:</span>
-                <span className="font-black uppercase">{ticket.waiterName || 'STAFF'}</span>
-              </div>
-              {ticket.customerName && (
-                <div className="flex justify-between">
-                  <span>CUSTOMER:</span>
-                  <span className="uppercase">{ticket.customerName}</span>
-                </div>
-              )}
-            </div>
+            {/* Separator */}
+            <div className="border-t-2 border-dashed border-black my-3"></div>
 
-            {/* Station Items List */}
-            <div className="my-2 space-y-3">
-              {Object.keys(stationGroups).map((stationName) => (
-                <div key={stationName} className="space-y-1.5">
-                  <div className="text-center font-black text-xs uppercase border-y-2 border-black py-1 bg-gray-100">
-                    [ {stationName} ]
+            {/* Order Items */}
+            <div className="my-3 space-y-3">
+              {ticket.items.map((item, idx) => (
+                <div key={idx} className="space-y-0.5">
+                  <div className="font-black text-base uppercase leading-snug text-black">
+                    {item.quantity} &times; {item.name}
                   </div>
-                  {stationGroups[stationName].map((item, idx) => (
-                    <div key={idx} className="border-b border-dashed border-black pb-1.5 pt-0.5">
-                      <div className="flex justify-between items-start">
-                        <span className="font-black text-sm uppercase pr-1 flex-1">{item.name}</span>
-                        <span className="font-black text-base border-2 border-black px-1 rounded-xs ml-1">
-                          {item.quantity}x
-                        </span>
-                      </div>
-                      {item.notes && (
-                        <div className="mt-1 font-black text-[11px] bg-black text-white px-1.5 py-0.5 rounded-xs inline-block">
-                          *** NOTE: {item.notes.toUpperCase()} ***
-                        </div>
-                      )}
+                  {item.notes && (
+                    <div className="font-black text-xs text-black pl-2">
+                      * Note: {item.notes.toUpperCase()}
                     </div>
-                  ))}
+                  )}
                 </div>
               ))}
             </div>
 
             {ticket.specialNotes && (
-              <div className="border-2 border-black p-2 my-2 font-black text-[11px]">
-                SPECIAL ORDER NOTES:
-                <div className="uppercase font-extrabold mt-0.5">{ticket.specialNotes}</div>
+              <div className="border-2 border-black p-2 my-2 font-black text-xs">
+                SPECIAL INSTRUCTIONS:
+                <div className="uppercase font-black mt-0.5">{ticket.specialNotes}</div>
               </div>
             )}
 
-            {/* Footer Summary */}
-            <div className="border-t-2 border-dashed border-black pt-2 mt-3 space-y-2">
-              <div className="flex justify-between items-center font-black text-sm">
-                <span>TOTAL ITEMS:</span>
-                <span className="border-2 border-black px-2 py-0.5">{totalItemsCount}</span>
-              </div>
-
-              <div className="pt-2 text-[10px] space-y-3 font-bold">
-                <div>Prepared By: _________________________</div>
-                <div>Checked By:  _________________________</div>
-              </div>
-
-              <div className="text-center font-black text-[10px] uppercase border-t border-black pt-2 mt-2">
-                *** KITCHEN COPY • NO FINANCIAL DATA ***
-              </div>
-            </div>
+            {/* Bottom Separators */}
+            <div className="border-t-2 border-dashed border-black my-3"></div>
+            <div className="border-t-2 border-black mt-1"></div>
           </div>
         </div>
 
