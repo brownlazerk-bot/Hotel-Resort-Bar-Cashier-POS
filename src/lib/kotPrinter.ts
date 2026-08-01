@@ -57,11 +57,22 @@ export function printKotThermalTicket(
     <html>
       <head>
         <meta charset="utf-8">
-        <title>KOT ${ticket.id}</title>
+        <title></title>
         <style>
           @page {
             size: 80mm auto;
-            margin: 0;
+            margin: 0mm !important;
+          }
+          @media print {
+            @page {
+              size: 80mm auto;
+              margin: 0mm !important;
+            }
+            html, body {
+              width: 80mm !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
           }
           * {
             box-sizing: border-box;
@@ -87,7 +98,7 @@ export function printKotThermalTicket(
           .kot-body {
             width: 76mm;
             margin: 0 auto;
-            padding: 4mm 2mm 20mm 2mm;
+            padding: 2mm 1mm 2mm 1mm;
           }
           .text-center { text-align: center; }
           .font-black { font-weight: 900; }

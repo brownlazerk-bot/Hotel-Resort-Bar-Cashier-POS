@@ -25,11 +25,23 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Receipt ${order.id}</title>
+          <title></title>
           <style>
             @page {
-              size: 80mm auto;
-              margin: 0;
+              size: 80mm 210mm;
+              margin: 0mm !important;
+            }
+            @media print {
+              @page {
+                size: 80mm 210mm;
+                margin: 0mm !important;
+              }
+              html, body {
+                width: 72.1mm !important;
+                max-width: 72.1mm !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+              }
             }
             * {
               box-sizing: border-box;
@@ -40,22 +52,24 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
               box-shadow: none !important;
             }
             html, body {
-              width: 80mm;
+              width: 72.1mm;
+              max-width: 72.1mm;
               margin: 0 auto !important;
               padding: 0 !important;
               background: #ffffff !important;
               color: #000000 !important;
               font-family: 'Courier New', Courier, Consolas, Monaco, monospace;
               font-size: 11px;
-              line-height: 1.35;
+              line-height: 1.3;
               font-weight: 700;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
             .receipt-body {
-              width: 76mm;
+              width: 72.1mm;
+              max-width: 72.1mm;
               margin: 0 auto;
-              padding: 4mm 2mm 6mm 2mm;
+              padding: 2mm 0mm 2mm 0mm;
             }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
@@ -170,7 +184,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
         <div className="flex justify-center my-2">
           <div 
             id="thermal-receipt-printable" 
-            className="w-[300px] bg-white text-black font-mono text-[11px] leading-relaxed p-4 border border-gray-400 rounded-sm shadow-md select-text"
+            className="w-[280px] bg-white text-black font-mono text-[11px] leading-relaxed p-3 border border-gray-400 rounded-sm shadow-md select-text"
             style={{ color: '#000000', backgroundColor: '#ffffff' }}
           >
             {/* Header / Business Information */}
