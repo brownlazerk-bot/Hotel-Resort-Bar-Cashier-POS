@@ -3,7 +3,8 @@ import {
   X, Printer, DollarSign, ChefHat, User, Phone, 
   Calendar, Clock, Receipt, CreditCard, Building, ShieldCheck
 } from 'lucide-react';
-import { Order, OrderStatus, PaymentStatus } from '../types';
+import { Order, OrderStatus, PaymentStatus, KitchenTicket } from '../types';
+import { printKotThermalTicket } from '../lib/kotPrinter';
 
 interface OrderDetailsModalProps {
   order: Order;
@@ -201,10 +202,10 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
         )}
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-gray-200 dark:border-gray-800">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-2 border-t border-gray-200 dark:border-gray-800">
           <button
             onClick={() => { onClose(); onReceivePayment(order); }}
-            className="py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-center space-x-1"
+            className="py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
           >
             <DollarSign className="w-4 h-4" />
             <span>Pay / Deposit</span>
@@ -213,7 +214,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
           {onEditOrder && order.status !== 'Cancelled' && (
             <button
               onClick={() => { onClose(); onEditOrder(order); }}
-              className="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center space-x-1"
+              className="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
             >
               <span>Edit Order</span>
             </button>
@@ -221,17 +222,48 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 
           <button
             onClick={() => { onClose(); onAddItems(order); }}
-            className="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-xs flex items-center justify-center space-x-1"
+            className="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
           >
             <span>+ Add Items</span>
           </button>
 
           <button
             onClick={() => onPrintReceipt(order)}
-            className="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-xs flex items-center justify-center space-x-1"
+            className="py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>Print Bill</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const foodItems = order.items.filter(i => i.isFood || i.category === 'Food');
+              if (foodItems.length === 0) {
+                alert('This order contains no food items for the kitchen.');
+                return;
+              }
+              const kot: KitchenTicket = {
+                id: order.kotId || `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
+                orderId: order.id,
+                tableNumber: order.tableNumber || 'COUNTER',
+                waiterName: order.waiterName || 'Staff',
+                customerName: order.customerName,
+                items: foodItems.map(f => ({
+                  itemId: f.itemId,
+                  name: f.name,
+                  quantity: f.quantity,
+                  notes: f.notes
+                })),
+                orderTime: order.createdAt || new Date().toISOString(),
+                status: 'Pending'
+              };
+              printKotThermalTicket(kot, 'NEW ORDER');
+            }}
+            className="py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
+            title="Print Kitchen Order Ticket (No Prices)"
+          >
+            <ChefHat className="w-4 h-4 text-rose-500" />
+            <span>Print KOT</span>
           </button>
 
           {userRole === 'Manager' || order.status !== 'Paid' ? (
@@ -242,12 +274,12 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
                   onClose();
                 }
               }}
-              className="py-2.5 rounded-xl bg-rose-100 dark:bg-rose-950/60 hover:bg-rose-200 text-rose-700 dark:text-rose-300 font-bold text-xs"
+              className="py-2.5 rounded-xl bg-rose-100 dark:bg-rose-950/60 hover:bg-rose-200 text-rose-700 dark:text-rose-300 font-bold text-xs cursor-pointer"
             >
               Cancel Order
             </button>
           ) : (
-            <button onClick={onClose} className="py-2.5 rounded-xl bg-gray-200 dark:bg-gray-800 text-xs font-bold">
+            <button onClick={onClose} className="py-2.5 rounded-xl bg-gray-200 dark:bg-gray-800 text-xs font-bold cursor-pointer">
               Close
             </button>
           )}

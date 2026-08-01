@@ -10,6 +10,7 @@ import {
   PaymentStatus, OrderStatus, AppUser 
 } from '../types';
 import { formatCurrency } from '../lib/currency';
+import { printKotThermalTicket } from '../lib/kotPrinter';
 
 import { Language, getTranslation } from '../lib/translations';
 
@@ -240,6 +241,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       };
       newOrder.kotGenerated = true;
       newOrder.kotId = kotId;
+      
+      // Auto-print 80mm ESC/POS KOT ticket for kitchen staff
+      printKotThermalTicket(newKot, 'NEW ORDER');
     }
 
     onOrderCompleted(newOrder, newKot);
@@ -450,6 +454,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
       newOrder.kotGenerated = true;
       newOrder.kotId = kotId;
+
+      // Auto-print 80mm ESC/POS KOT ticket for kitchen staff
+      printKotThermalTicket(newKot, 'NEW ORDER');
     }
 
     // Trigger parent state update & receipt modal

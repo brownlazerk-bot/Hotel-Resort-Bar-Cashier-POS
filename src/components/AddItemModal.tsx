@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Plus, Trash2, X, CheckCircle2, ShoppingCart } from 'lucide-react';
 import { Order, OrderItem, MenuItem, KitchenTicket } from '../types';
+import { printKotThermalTicket } from '../lib/kotPrinter';
 
 interface AddItemModalProps {
   order: Order;
@@ -151,6 +152,9 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
         status: 'Pending',
         specialNotes: specialNote ? `Additional items order: ${specialNote}` : 'Additional items order'
       };
+
+      // Auto-print 80mm ESC/POS KOT ticket for kitchen staff
+      printKotThermalTicket(newKot, 'UPDATED ORDER');
     }
 
     const updatedOrder: Order = {

@@ -91,10 +91,13 @@ export interface KitchenTicket {
     name: string;
     quantity: number;
     notes?: string;
+    category?: string;
   }[];
   orderTime: string; // ISO string
   status: KitchenTicketStatus;
   specialNotes?: string;
+  orderType?: string;
+  ticketType?: 'NEW ORDER' | 'UPDATED ORDER' | 'CANCELLED ITEM';
 }
 
 export interface OrderItem {

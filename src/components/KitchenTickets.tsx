@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { 
   ChefHat, Clock, CheckCircle2, AlertCircle, Sparkles, 
-  ArrowRight, Search, FileText, Check 
+  ArrowRight, Search, FileText, Check, Printer 
 } from 'lucide-react';
 import { KitchenTicket, KitchenTicketStatus } from '../types';
+import { KotPrintModal } from './KotPrintModal';
+import { printKotThermalTicket } from '../lib/kotPrinter';
 
 interface KitchenTicketsProps {
   kitchenTickets: KitchenTicket[];
@@ -18,6 +20,7 @@ export const KitchenTickets: React.FC<KitchenTicketsProps> = ({
 }) => {
   const [filterStatus, setFilterStatus] = useState<string>('Active');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedKot, setSelectedKot] = useState<KitchenTicket | null>(null);
 
   const filteredTickets = kitchenTickets.filter(t => {
     const matchesSearch = t.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -164,12 +167,21 @@ export const KitchenTickets: React.FC<KitchenTicketsProps> = ({
 
                 </div>
 
-                {/* Progress Status Buttons */}
-                <div className="flex space-x-2 pt-2 border-t border-gray-200 dark:border-gray-800">
+                {/* Progress Status Buttons & Print KOT */}
+                <div className="flex items-center space-x-2 pt-2 border-t border-gray-200 dark:border-gray-800">
+                  <button
+                    onClick={() => printKotThermalTicket(ticket, 'NEW ORDER')}
+                    title="Print KOT Thermal Ticket (80mm)"
+                    className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Print KOT</span>
+                  </button>
+
                   {ticket.status === 'Pending' && (
                     <button
                       onClick={() => onUpdateStatus(ticket.id, 'Preparing')}
-                      className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm"
+                      className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                     >
                       Start Preparing
                     </button>
@@ -178,7 +190,7 @@ export const KitchenTickets: React.FC<KitchenTicketsProps> = ({
                   {ticket.status === 'Preparing' && (
                     <button
                       onClick={() => onUpdateStatus(ticket.id, 'Ready')}
-                      className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
+                      className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                     >
                       Mark Ready
                     </button>
@@ -187,15 +199,15 @@ export const KitchenTickets: React.FC<KitchenTicketsProps> = ({
                   {ticket.status === 'Ready' && (
                     <button
                       onClick={() => onUpdateStatus(ticket.id, 'Served')}
-                      className="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm"
+                      className="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                     >
                       Mark Served
                     </button>
                   )}
 
                   {ticket.status === 'Served' && (
-                    <span className="w-full text-center text-xs font-bold text-emerald-600 dark:text-emerald-400 py-2">
-                      ✓ Completed & Served
+                    <span className="flex-1 text-center text-xs font-bold text-emerald-600 dark:text-emerald-400 py-2">
+                      ✓ Served
                     </span>
                   )}
                 </div>
@@ -204,6 +216,15 @@ export const KitchenTickets: React.FC<KitchenTicketsProps> = ({
             );
           })}
         </div>
+      )}
+
+      {/* KotPrintModal */}
+      {selectedKot && (
+        <KotPrintModal
+          ticket={selectedKot}
+          onClose={() => setSelectedKot(null)}
+          darkMode={darkMode}
+        />
       )}
 
     </div>
