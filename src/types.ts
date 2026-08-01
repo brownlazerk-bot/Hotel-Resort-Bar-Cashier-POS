@@ -172,6 +172,8 @@ export interface Order {
   items: OrderItem[];
   subtotal: number;
   discount: number;
+  serviceCharge?: number;
+  otherCharges?: number;
   total: number;
   amountPaid: number;
   balance: number;
