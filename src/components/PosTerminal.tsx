@@ -10,7 +10,12 @@ import {
   PaymentStatus, OrderStatus, AppUser 
 } from '../types';
 import { formatCurrency } from '../lib/currency';
-import { printKotThermalTicket } from '../lib/kotPrinter';
+import { 
+  printKotThermalTicket, 
+  printPoolTokenTicket, 
+  printSaunaTokenTicket, 
+  printRoomTokenTicket 
+} from '../lib/serviceTokenPrinter';
 
 import { Language, getTranslation } from '../lib/translations';
 
@@ -246,6 +251,66 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       printKotThermalTicket(newKot, 'NEW ORDER');
     }
 
+    // Auto-print Piscine Pool Pass Token
+    const poolItemsInCart = cartItems.filter(i => i.category === 'Pool Services');
+    if (poolItemsInCart.length > 0) {
+      printPoolTokenTicket({
+        orderId,
+        tableNumber: selectedTable?.tableNumber || selectedRoom?.number || 'Poolside',
+        waiterName: newOrder.waiterName,
+        cashierName: newOrder.cashierName,
+        customerName: newOrder.customerName,
+        items: poolItemsInCart.map(p => ({
+          itemId: p.itemId,
+          name: p.name,
+          quantity: p.quantity,
+          unitPrice: p.unitPrice,
+          totalPrice: p.totalPrice,
+          notes: p.notes
+        }))
+      });
+    }
+
+    // Auto-print Sauna Pass Token
+    const saunaItemsInCart = cartItems.filter(i => i.category === 'Sauna Services');
+    if (saunaItemsInCart.length > 0) {
+      printSaunaTokenTicket({
+        orderId,
+        tableNumber: selectedTable?.tableNumber || selectedRoom?.number || 'Sauna Desk',
+        waiterName: newOrder.waiterName,
+        cashierName: newOrder.cashierName,
+        customerName: newOrder.customerName,
+        items: saunaItemsInCart.map(s => ({
+          itemId: s.itemId,
+          name: s.name,
+          quantity: s.quantity,
+          unitPrice: s.unitPrice,
+          totalPrice: s.totalPrice,
+          notes: s.notes
+        }))
+      });
+    }
+
+    // Auto-print Room Service Voucher Token
+    const roomItemsInCart = cartItems.filter(i => i.category === 'Room Services' || i.category === 'Apartment Services');
+    if (roomItemsInCart.length > 0) {
+      printRoomTokenTicket({
+        orderId,
+        roomNumber: selectedRoom?.number || selectedTable?.tableNumber || 'Reception',
+        waiterName: newOrder.waiterName,
+        cashierName: newOrder.cashierName,
+        customerName: newOrder.customerName,
+        items: roomItemsInCart.map(r => ({
+          itemId: r.itemId,
+          name: r.name,
+          quantity: r.quantity,
+          unitPrice: r.unitPrice,
+          totalPrice: r.totalPrice,
+          notes: r.notes
+        }))
+      });
+    }
+
     onOrderCompleted(newOrder, newKot);
 
     // Reset POS cart
@@ -457,6 +522,72 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
       // Auto-print 80mm ESC/POS KOT ticket for kitchen staff
       printKotThermalTicket(newKot, 'NEW ORDER');
+    }
+
+    // Auto-print Piscine Pool Pass Token
+    const poolItemsInCart = cartItems.filter(i => i.category === 'Pool Services');
+    if (poolItemsInCart.length > 0) {
+      printPoolTokenTicket({
+        orderId,
+        tableNumber: selectedTable?.tableNumber || selectedRoom?.number || 'Poolside',
+        waiterName: activeWaiter?.name || 'Cashier Direct',
+        cashierName: newOrder.cashierName,
+        customerName: newOrder.customerName,
+        paymentStatus: newOrder.paymentStatus,
+        paymentMethod: newOrder.paymentMethod,
+        items: poolItemsInCart.map(p => ({
+          itemId: p.itemId,
+          name: p.name,
+          quantity: p.quantity,
+          unitPrice: p.unitPrice,
+          totalPrice: p.totalPrice,
+          notes: p.notes
+        }))
+      });
+    }
+
+    // Auto-print Sauna Pass Token
+    const saunaItemsInCart = cartItems.filter(i => i.category === 'Sauna Services');
+    if (saunaItemsInCart.length > 0) {
+      printSaunaTokenTicket({
+        orderId,
+        tableNumber: selectedTable?.tableNumber || selectedRoom?.number || 'Sauna Desk',
+        waiterName: activeWaiter?.name || 'Cashier Direct',
+        cashierName: newOrder.cashierName,
+        customerName: newOrder.customerName,
+        paymentStatus: newOrder.paymentStatus,
+        paymentMethod: newOrder.paymentMethod,
+        items: saunaItemsInCart.map(s => ({
+          itemId: s.itemId,
+          name: s.name,
+          quantity: s.quantity,
+          unitPrice: s.unitPrice,
+          totalPrice: s.totalPrice,
+          notes: s.notes
+        }))
+      });
+    }
+
+    // Auto-print Room Service Voucher Token
+    const roomItemsInCart = cartItems.filter(i => i.category === 'Room Services' || i.category === 'Apartment Services');
+    if (roomItemsInCart.length > 0) {
+      printRoomTokenTicket({
+        orderId,
+        roomNumber: selectedRoom?.number || selectedTable?.tableNumber || 'Reception',
+        waiterName: activeWaiter?.name || 'Cashier Direct',
+        cashierName: newOrder.cashierName,
+        customerName: newOrder.customerName,
+        paymentStatus: newOrder.paymentStatus,
+        paymentMethod: newOrder.paymentMethod,
+        items: roomItemsInCart.map(r => ({
+          itemId: r.itemId,
+          name: r.name,
+          quantity: r.quantity,
+          unitPrice: r.unitPrice,
+          totalPrice: r.totalPrice,
+          notes: r.notes
+        }))
+      });
     }
 
     // Trigger parent state update & receipt modal

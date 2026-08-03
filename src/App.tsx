@@ -1137,6 +1137,7 @@ export default function App() {
         {activeTab === 'kitchen' && (
           <KitchenTickets
             kitchenTickets={kitchenTickets}
+            orders={orders}
             onUpdateStatus={handleUpdateKitchenStatus}
             darkMode={darkMode}
           />

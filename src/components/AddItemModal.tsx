@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { Search, Plus, Trash2, X, CheckCircle2, ShoppingCart } from 'lucide-react';
 import { Order, OrderItem, MenuItem, KitchenTicket } from '../types';
-import { printKotThermalTicket } from '../lib/kotPrinter';
+import { 
+  printKotThermalTicket, 
+  printPoolTokenTicket, 
+  printSaunaTokenTicket, 
+  printRoomTokenTicket 
+} from '../lib/serviceTokenPrinter';
 
 interface AddItemModalProps {
   order: Order;
@@ -155,6 +160,66 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
 
       // Auto-print 80mm ESC/POS KOT ticket for kitchen staff
       printKotThermalTicket(newKot, 'UPDATED ORDER');
+    }
+
+    // Check if new pool items generate a Pool Token
+    const newPoolItems = newItems.filter(i => i.category === 'Pool Services');
+    if (newPoolItems.length > 0) {
+      printPoolTokenTicket({
+        orderId: order.id,
+        tableNumber: order.tableNumber || 'Poolside',
+        waiterName: order.waiterName,
+        customerName: order.customerName,
+        paymentStatus: newPaymentStatus,
+        items: newPoolItems.map(p => ({
+          itemId: p.itemId,
+          name: p.name,
+          quantity: p.quantity,
+          unitPrice: p.unitPrice,
+          totalPrice: p.totalPrice,
+          notes: p.notes
+        }))
+      }, 'UPDATED POOL PASS');
+    }
+
+    // Check if new sauna items generate a Sauna Token
+    const newSaunaItems = newItems.filter(i => i.category === 'Sauna Services');
+    if (newSaunaItems.length > 0) {
+      printSaunaTokenTicket({
+        orderId: order.id,
+        tableNumber: order.tableNumber || 'Sauna Desk',
+        waiterName: order.waiterName,
+        customerName: order.customerName,
+        paymentStatus: newPaymentStatus,
+        items: newSaunaItems.map(s => ({
+          itemId: s.itemId,
+          name: s.name,
+          quantity: s.quantity,
+          unitPrice: s.unitPrice,
+          totalPrice: s.totalPrice,
+          notes: s.notes
+        }))
+      }, 'UPDATED SAUNA PASS');
+    }
+
+    // Check if new room items generate a Room Voucher Token
+    const newRoomItems = newItems.filter(i => i.category === 'Room Services' || i.category === 'Apartment Services');
+    if (newRoomItems.length > 0) {
+      printRoomTokenTicket({
+        orderId: order.id,
+        roomNumber: order.tableNumber || 'Reception',
+        waiterName: order.waiterName,
+        customerName: order.customerName,
+        paymentStatus: newPaymentStatus,
+        items: newRoomItems.map(r => ({
+          itemId: r.itemId,
+          name: r.name,
+          quantity: r.quantity,
+          unitPrice: r.unitPrice,
+          totalPrice: r.totalPrice,
+          notes: r.notes
+        }))
+      }, 'UPDATED ROOM VOUCHER');
     }
 
     const updatedOrder: Order = {

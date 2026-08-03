@@ -4,6 +4,7 @@ export interface ItemStockMovement {
   itemId: string;
   itemName: string;
   category: string;
+  productSection?: string;
   unit: string;
   price: number;
   openingStock: number;       // Ububiko bwa Mbere (Opening Stock before target date)

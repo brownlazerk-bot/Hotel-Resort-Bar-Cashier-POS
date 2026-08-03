@@ -124,19 +124,65 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
               margin: 6px 0;
             }
             @media print {
-              button { display: none !important; }
+              .no-print { display: none !important; }
             }
           </style>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
         </head>
         <body>
-          <div class="receipt-body">
+          <div class="no-print" style="position: sticky; top: 0; left: 0; right: 0; background: #0f172a; color: #ffffff; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 99999; font-family: sans-serif; border-bottom: 2px solid #f59e0b; margin-bottom: 10px;">
+            <div style="font-weight: bold; font-size: 12px; color: #f59e0b;">
+              RECEIPT #${receiptNo}
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button onclick="window.print()" style="background: #f59e0b; color: #0f172a; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer;">
+                🖨️ Print
+              </button>
+              <button onclick="downloadAsPDF()" style="background: #10b981; color: #ffffff; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer;">
+                📥 Download PDF
+              </button>
+              <button onclick="window.close()" style="background: #334155; color: #cbd5e1; border: none; padding: 6px 10px; border-radius: 6px; font-weight: bold; font-size: 11px; cursor: pointer;">
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div id="receipt-printable-area" class="receipt-body">
             ${printContent.innerHTML}
           </div>
+
           <script>
+            function downloadAsPDF() {
+              const element = document.getElementById('receipt-printable-area');
+              const noPrints = document.querySelectorAll('.no-print');
+              noPrints.forEach(el => el.style.display = 'none');
+
+              const opt = {
+                margin:       [2, 2, 2, 2],
+                filename:     'Receipt_${receiptNo}.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'mm', format: [80, 210], orientation: 'portrait' }
+              };
+
+              if (typeof html2pdf !== 'undefined') {
+                html2pdf().set(opt).from(element).save().then(() => {
+                  noPrints.forEach(el => el.style.display = 'flex');
+                }).catch(err => {
+                  noPrints.forEach(el => el.style.display = 'flex');
+                  window.print();
+                });
+              } else {
+                noPrints.forEach(el => el.style.display = 'flex');
+                window.print();
+              }
+            }
+
             window.onload = function() {
               window.focus();
-              window.print();
-              setTimeout(function() { window.close(); }, 600);
+              setTimeout(function() {
+                window.print();
+              }, 300);
             };
           </script>
         </body>

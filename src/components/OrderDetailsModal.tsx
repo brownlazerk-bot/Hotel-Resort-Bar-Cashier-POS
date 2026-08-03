@@ -1,10 +1,15 @@
 import React from 'react';
 import { 
   X, Printer, DollarSign, ChefHat, User, Phone, 
-  Calendar, Clock, Receipt, CreditCard, Building, ShieldCheck
+  Calendar, Clock, Receipt, CreditCard, Building, ShieldCheck, Waves, Flame
 } from 'lucide-react';
 import { Order, OrderStatus, PaymentStatus, KitchenTicket } from '../types';
-import { printKotThermalTicket } from '../lib/kotPrinter';
+import { 
+  printKotThermalTicket, 
+  printPoolTokenTicket, 
+  printSaunaTokenTicket, 
+  printRoomTokenTicket 
+} from '../lib/serviceTokenPrinter';
 
 interface OrderDetailsModalProps {
   order: Order;
@@ -235,36 +240,128 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
             <span>Print Bill</span>
           </button>
 
-          <button
-            onClick={() => {
-              const foodItems = order.items.filter(i => i.isFood || i.category === 'Food');
-              if (foodItems.length === 0) {
-                alert('This order contains no food items for the kitchen.');
-                return;
-              }
-              const kot: KitchenTicket = {
-                id: order.kotId || `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
-                orderId: order.id,
-                tableNumber: order.tableNumber || 'COUNTER',
-                waiterName: order.waiterName || 'Staff',
-                customerName: order.customerName,
-                items: foodItems.map(f => ({
-                  itemId: f.itemId,
-                  name: f.name,
-                  quantity: f.quantity,
-                  notes: f.notes
-                })),
-                orderTime: order.createdAt || new Date().toISOString(),
-                status: 'Pending'
-              };
-              printKotThermalTicket(kot, 'NEW ORDER');
-            }}
-            className="py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
-            title="Print Kitchen Order Ticket (No Prices)"
-          >
-            <ChefHat className="w-4 h-4 text-rose-500" />
-            <span>Print KOT</span>
-          </button>
+          {/* Kitchen KOT Button */}
+          {order.items.some(i => i.isFood || i.category === 'Food') && (
+            <button
+              onClick={() => {
+                const foodItems = order.items.filter(i => i.isFood || i.category === 'Food');
+                const kot: KitchenTicket = {
+                  id: order.kotId || `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
+                  orderId: order.id,
+                  tableNumber: order.tableNumber || 'COUNTER',
+                  waiterName: order.waiterName || 'Staff',
+                  customerName: order.customerName,
+                  items: foodItems.map(f => ({
+                    itemId: f.itemId,
+                    name: f.name,
+                    quantity: f.quantity,
+                    notes: f.notes
+                  })),
+                  orderTime: order.createdAt || new Date().toISOString(),
+                  status: 'Pending'
+                };
+                printKotThermalTicket(kot, 'RE-PRINT');
+              }}
+              className="py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
+              title="Print Kitchen Order Ticket"
+            >
+              <ChefHat className="w-4 h-4 text-rose-500" />
+              <span>Print KOT</span>
+            </button>
+          )}
+
+          {/* Piscine Pool Token Button */}
+          {order.items.some(i => i.category === 'Pool Services') && (
+            <button
+              onClick={() => {
+                const poolItems = order.items.filter(i => i.category === 'Pool Services');
+                printPoolTokenTicket({
+                  orderId: order.id,
+                  tableNumber: order.tableNumber || 'Poolside',
+                  waiterName: order.waiterName,
+                  cashierName: order.cashierName,
+                  customerName: order.customerName,
+                  paymentStatus: order.paymentStatus,
+                  paymentMethod: order.paymentMethod,
+                  items: poolItems.map(p => ({
+                    itemId: p.itemId,
+                    name: p.name,
+                    quantity: p.quantity,
+                    unitPrice: p.unitPrice,
+                    totalPrice: p.totalPrice,
+                    notes: p.notes
+                  }))
+                }, 'PISCINE PASS TOKEN');
+              }}
+              className="py-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
+              title="Print Swimming Pool Token Pass"
+            >
+              <Waves className="w-4 h-4 text-sky-500" />
+              <span>Pool Token</span>
+            </button>
+          )}
+
+          {/* Sauna & Spa Token Button */}
+          {order.items.some(i => i.category === 'Sauna Services') && (
+            <button
+              onClick={() => {
+                const saunaItems = order.items.filter(i => i.category === 'Sauna Services');
+                printSaunaTokenTicket({
+                  orderId: order.id,
+                  tableNumber: order.tableNumber || 'Sauna Desk',
+                  waiterName: order.waiterName,
+                  cashierName: order.cashierName,
+                  customerName: order.customerName,
+                  paymentStatus: order.paymentStatus,
+                  paymentMethod: order.paymentMethod,
+                  items: saunaItems.map(s => ({
+                    itemId: s.itemId,
+                    name: s.name,
+                    quantity: s.quantity,
+                    unitPrice: s.unitPrice,
+                    totalPrice: s.totalPrice,
+                    notes: s.notes
+                  }))
+                }, 'SAUNA PASS TOKEN');
+              }}
+              className="py-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
+              title="Print Sauna & Spa Token Pass"
+            >
+              <Flame className="w-4 h-4 text-orange-500" />
+              <span>Sauna Token</span>
+            </button>
+          )}
+
+          {/* Room Service Voucher Button */}
+          {order.items.some(i => i.category === 'Room Services' || i.category === 'Apartment Services') && (
+            <button
+              onClick={() => {
+                const roomItems = order.items.filter(i => i.category === 'Room Services' || i.category === 'Apartment Services');
+                printRoomTokenTicket({
+                  orderId: order.id,
+                  roomNumber: order.tableNumber || 'Reception',
+                  waiterName: order.waiterName,
+                  cashierName: order.cashierName,
+                  customerName: order.customerName,
+                  paymentStatus: order.paymentStatus,
+                  paymentMethod: order.paymentMethod,
+                  items: roomItems.map(r => ({
+                    itemId: r.itemId,
+                    name: r.name,
+                    quantity: r.quantity,
+                    unitPrice: r.unitPrice,
+                    totalPrice: r.totalPrice,
+                    notes: r.notes
+                  }))
+                }, 'ROOM SERVICE VOUCHER');
+              }}
+              className="py-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold text-xs flex items-center justify-center space-x-1 cursor-pointer"
+              title="Print Room Service Voucher"
+            >
+              <Building className="w-4 h-4 text-purple-500" />
+              <span>Room Voucher</span>
+            </button>
+          )}
 
           {userRole === 'Manager' || order.status !== 'Paid' ? (
             <button

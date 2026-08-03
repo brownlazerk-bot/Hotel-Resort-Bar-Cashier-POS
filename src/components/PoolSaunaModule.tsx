@@ -4,6 +4,7 @@ import {
   Printer, CheckCircle2, ShoppingBag 
 } from 'lucide-react';
 import { MenuItem, Order, PaymentMethod, Shift } from '../types';
+import { printPoolTokenTicket, printSaunaTokenTicket } from '../lib/serviceTokenPrinter';
 
 interface PoolSaunaModuleProps {
   menuItems: MenuItem[];
@@ -88,6 +89,35 @@ export const PoolSaunaModule: React.FC<PoolSaunaModuleProps> = ({
     };
 
     onTicketSold(newOrder);
+
+    // Auto-print Piscine or Sauna Service Token Pass
+    const tokenData = {
+      id: `${selectedItem.category === 'Pool Services' ? 'POOL' : 'SAUNA'}-${Math.floor(1000 + Math.random() * 9000)}`,
+      orderId: newOrder.id,
+      tableNumber: 'Pool & Sauna Desk',
+      waiterName: currentShift.cashierName,
+      cashierName: currentShift.cashierName,
+      customerName: newOrder.customerName,
+      orderTime: newOrder.createdAt,
+      paymentStatus: 'PAID',
+      paymentMethod,
+      items: [
+        {
+          itemId: selectedItem.id,
+          name: selectedItem.name,
+          quantity: ticketQuantity,
+          unitPrice: selectedItem.price,
+          totalPrice: totalAmount,
+          category: selectedItem.category
+        }
+      ]
+    };
+
+    if (selectedItem.category === 'Pool Services') {
+      printPoolTokenTicket(tokenData, 'PISCINE PASS TOKEN');
+    } else {
+      printSaunaTokenTicket(tokenData, 'SAUNA & SPA PASS TOKEN');
+    }
 
     // Reset form
     setVisitorName('');

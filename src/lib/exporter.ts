@@ -10,17 +10,103 @@ export function printReportHTML(title: string, htmlContent: string) {
     return;
   }
 
+  const cleanFilename = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
       <head>
+        <meta charset="utf-8">
         <title>${title}</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
         <style>
+          @media print {
+            .no-print {
+              display: none !important;
+            }
+            body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+            }
+            .report-container {
+              box-shadow: none !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              max-width: 100% !important;
+            }
+          }
+          * { box-sizing: border-box; }
           body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 20px;
+            font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
             color: #1f2937;
-            background-color: #ffffff;
+            background-color: #f8fafc;
+          }
+          .toolbar {
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #0f172a;
+            color: #ffffff;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 99999;
+            border-bottom: 2px solid #f59e0b;
+          }
+          .toolbar-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            font-size: 14px;
+          }
+          .toolbar-btn {
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+          }
+          .btn-print {
+            background: #f59e0b;
+            color: #0f172a;
+          }
+          .btn-print:hover {
+            background: #d97706;
+          }
+          .btn-pdf {
+            background: #10b981;
+            color: #ffffff;
+          }
+          .btn-pdf:hover {
+            background: #059669;
+          }
+          .btn-close {
+            background: #334155;
+            color: #cbd5e1;
+          }
+          .btn-close:hover {
+            background: #475569;
+            color: #ffffff;
+          }
+          .report-container {
+            max-width: 1000px;
+            margin: 20px auto;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
           }
           h1, h2, h3 { color: #111827; margin-bottom: 8px; }
           .header { border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 20px; }
@@ -35,17 +121,64 @@ export function printReportHTML(title: string, htmlContent: string) {
           .text-right { text-align: right; }
           .total-row { font-weight: bold; background: #f9fafb; font-size: 14px; }
           .footer { text-align: center; margin-top: 30px; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 12px; }
-          @media print {
-            body { margin: 0; }
-            button { display: none; }
-          }
         </style>
       </head>
       <body>
-        ${htmlContent}
+        <div class="toolbar no-print">
+          <div class="toolbar-title">
+            <span style="color: #f59e0b;">SEVEN TO SEVEN</span>
+            <span style="color: #94a3b8;">| ${title}</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button onclick="window.print()" class="toolbar-btn btn-print">
+              🖨️ Print Document
+            </button>
+            <button onclick="downloadAsPDF()" class="toolbar-btn btn-pdf">
+              📥 Download PDF
+            </button>
+            <button onclick="window.close()" class="toolbar-btn btn-close">
+              ✕ Close
+            </button>
+          </div>
+        </div>
+
+        <div id="report-printable-area" class="report-container">
+          ${htmlContent}
+        </div>
+
         <script>
+          function downloadAsPDF() {
+            const element = document.getElementById('report-printable-area');
+            const noPrints = document.querySelectorAll('.no-print');
+            noPrints.forEach(el => el.style.display = 'none');
+
+            const opt = {
+              margin:       [5, 5, 5, 5],
+              filename:     '${cleanFilename}.pdf',
+              image:        { type: 'jpeg', quality: 0.98 },
+              html2canvas:  { scale: 2, useCORS: true, logging: false },
+              jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            if (typeof html2pdf !== 'undefined') {
+              html2pdf().set(opt).from(element).save().then(() => {
+                noPrints.forEach(el => el.style.display = 'flex');
+              }).catch(err => {
+                console.error(err);
+                noPrints.forEach(el => el.style.display = 'flex');
+                window.print();
+              });
+            } else {
+              noPrints.forEach(el => el.style.display = 'flex');
+              window.print();
+            }
+          }
+
           window.onload = function() {
-            window.print();
+            window.focus();
+            setTimeout(function() {
+              window.print();
+            }, 400);
           };
         </script>
       </body>
