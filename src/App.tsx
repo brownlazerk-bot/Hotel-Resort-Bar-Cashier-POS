@@ -1163,6 +1163,7 @@ export default function App() {
             onNavigateToOrders={() => setActiveTab('order_center')}
             darkMode={darkMode}
             language={language}
+            loggedInUser={currentUser || undefined}
           />
         )}
 

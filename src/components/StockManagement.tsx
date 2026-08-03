@@ -3,13 +3,28 @@ import {
   PackageCheck, AlertTriangle, Plus, Minus, Trash2, 
   Search, RefreshCw, FileText, ArrowUpRight, ArrowDownRight, History,
   Clock, ShoppingBag, Eye, ExternalLink, ShieldAlert, CheckCircle2, AlertCircle, Layers,
-  Calendar, Download, ArrowRight
+  Calendar, Download, ArrowRight, Printer, CheckSquare, Square, Utensils, Wine, Filter, Check
 } from 'lucide-react';
-import { MenuItem, StockAdjustmentLog, Order, Table, Waiter } from '../types';
+import { MenuItem, StockAdjustmentLog, Order, Table, Waiter, AppUser } from '../types';
 import { formatCurrency } from '../lib/currency';
 import { calculateStockMovementsForDate, ItemStockMovement } from '../lib/stockMovement';
+import { printReportHTML } from '../lib/exporter';
 
 import { Language, getTranslation } from '../lib/translations';
+
+export const isKitchenItem = (item: MenuItem | ItemStockMovement | { category: string; productSection?: string; isFood?: boolean }): boolean => {
+  const section = 'productSection' in item ? (item as any).productSection : undefined;
+  return item.category === 'Food' || section === 'Kitchen Menu' || (item as any).isFood === true;
+};
+
+export const isBarItem = (item: MenuItem | ItemStockMovement | { category: string; productSection?: string; isFood?: boolean }): boolean => {
+  if (isKitchenItem(item)) return false;
+  const section = 'productSection' in item ? (item as any).productSection : undefined;
+  return (
+    section === 'Bar Menu' ||
+    ['Beers', 'Soft Drinks', 'Wines', 'Whisky', 'Cocktails', 'Juices', 'Water', 'Coffee', 'Tea'].includes(item.category)
+  );
+};
 
 interface StockManagementProps {
   menuItems: MenuItem[];
@@ -21,6 +36,7 @@ interface StockManagementProps {
   onNavigateToOrders?: () => void;
   darkMode: boolean;
   language?: Language;
+  loggedInUser?: AppUser;
 }
 
 export const StockManagement: React.FC<StockManagementProps> = ({
@@ -32,7 +48,8 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   onUpdateStock,
   onNavigateToOrders,
   darkMode,
-  language = 'rw'
+  language = 'rw',
+  loggedInUser
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'available' | 'unpaid_reserved' | 'reconciliation' | 'logs'>('available');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -40,6 +57,300 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   const [reconciliationDate, setReconciliationDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+  // Department filter for reconciliation sheet
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<'All' | 'Kitchen' | 'Bar' | 'Other'>('All');
+  
+  // Custom item selection mode
+  const [customSelectMode, setCustomSelectMode] = useState<boolean>(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
+  // Print Modal State
+  const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
+  const [printDeptSelection, setPrintDeptSelection] = useState<'All' | 'Kitchen' | 'Bar' | 'Other' | 'Custom'>('All');
+  const [printPaperFormat, setPrintPaperFormat] = useState<'80mm' | 'A4'>('80mm');
+  const [printHideZeroMovement, setPrintHideZeroMovement] = useState<boolean>(false);
+  const [printIncludeValues, setPrintIncludeValues] = useState<boolean>(true);
+  const [printIncludeSignatures, setPrintIncludeSignatures] = useState<boolean>(true);
+
+  // Toggle single item selection
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
+  // Select handlers
+  const handleSelectAllFiltered = (filteredMovements: ItemStockMovement[]) => {
+    setSelectedItemIds(new Set(filteredMovements.map(m => m.itemId)));
+  };
+
+  const handleSelectKitchenOnly = () => {
+    const stockMovements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
+    setSelectedItemIds(new Set(stockMovements.filter(m => isKitchenItem(m)).map(m => m.itemId)));
+  };
+
+  const handleSelectBarOnly = () => {
+    const stockMovements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
+    setSelectedItemIds(new Set(stockMovements.filter(m => isBarItem(m)).map(m => m.itemId)));
+  };
+
+  const handleSelectActiveOnly = () => {
+    const stockMovements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
+    setSelectedItemIds(new Set(stockMovements.filter(m => 
+      m.openingStock > 0 || m.receivedStock > 0 || m.soldStock > 0 || m.adjustments !== 0 || m.closingStock > 0
+    ).map(m => m.itemId)));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedItemIds(new Set());
+  };
+
+  // Execution of print action
+  const handlePrintStockBalanceSheet = () => {
+    const allMovements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
+    
+    let itemsToPrint = allMovements;
+
+    // Apply department filter
+    if (printDeptSelection === 'Kitchen') {
+      itemsToPrint = itemsToPrint.filter(m => isKitchenItem(m));
+    } else if (printDeptSelection === 'Bar') {
+      itemsToPrint = itemsToPrint.filter(m => isBarItem(m));
+    } else if (printDeptSelection === 'Other') {
+      itemsToPrint = itemsToPrint.filter(m => !isKitchenItem(m) && !isBarItem(m));
+    } else if (printDeptSelection === 'Custom') {
+      if (selectedItemIds.size > 0) {
+        itemsToPrint = itemsToPrint.filter(m => selectedItemIds.has(m.itemId));
+      }
+    }
+
+    // Apply zero movement filter
+    if (printHideZeroMovement) {
+      itemsToPrint = itemsToPrint.filter(m => 
+        m.openingStock > 0 || m.receivedStock > 0 || m.soldStock > 0 || m.adjustments !== 0 || m.closingStock > 0
+      );
+    }
+
+    const deptTitle = printDeptSelection === 'Kitchen' ? 'Kitchen / Igikoni' :
+                      printDeptSelection === 'Bar' ? 'Bar & Beverage / Akabari' :
+                      printDeptSelection === 'Other' ? 'Other Services' :
+                      printDeptSelection === 'Custom' ? `Custom Selected (${itemsToPrint.length} Items)` :
+                      'All Departments';
+
+    const totOpening = itemsToPrint.reduce((sum, m) => sum + m.openingStock, 0);
+    const totReceived = itemsToPrint.reduce((sum, m) => sum + m.receivedStock, 0);
+    const totSold = itemsToPrint.reduce((sum, m) => sum + m.soldStock, 0);
+    const totAdjustments = itemsToPrint.reduce((sum, m) => sum + m.adjustments, 0);
+    const totClosing = itemsToPrint.reduce((sum, m) => sum + m.closingStock, 0);
+    const totValue = itemsToPrint.reduce((sum, m) => sum + m.dispatchedValue, 0);
+
+    const staffName = loggedInUser?.fullName || 'Manager / Store Keeper';
+    const printTime = new Date().toLocaleTimeString();
+
+    if (printPaperFormat === '80mm') {
+      // Thermal 80mm
+      const html = `
+        <style>
+          @page { size: 80mm auto; margin: 0mm !important; }
+          @media print {
+            @page { size: 80mm auto; margin: 0mm !important; }
+            html, body { width: 72.1mm !important; max-width: 72.1mm !important; margin: 0 auto !important; padding: 0 !important; }
+          }
+          * { box-sizing: border-box; }
+          body {
+            font-family: 'Courier New', Courier, monospace;
+            width: 72.1mm;
+            margin: 0 auto;
+            padding: 2mm 0;
+            color: #000000;
+            font-size: 10px;
+            line-height: 1.25;
+          }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .font-bold { font-weight: bold; }
+          .font-black { font-weight: 900; }
+          table { width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 4px; }
+          th { border-bottom: 1px solid #000; padding: 2px 1px; font-weight: 900; text-align: right; }
+          th:first-child { text-align: left; }
+          td { padding: 2px 1px; text-align: right; border-bottom: 1px dotted #888; }
+          td:first-child { text-align: left; font-weight: bold; }
+        </style>
+
+        <div style="text-align: center; margin-bottom: 6px;">
+          <div style="font-size: 15px; font-weight: 900; text-transform: uppercase;">SEVEN TO SEVEN</div>
+          <div style="font-size: 11px; font-weight: bold;">Sky View Resort</div>
+          <div style="font-size: 11px; font-weight: 900; margin: 3px 0; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 2px 0; text-transform: uppercase;">
+            DAILY STOCK BALANCE SHEET
+          </div>
+          <div style="font-size: 10px; font-weight: 900; margin-top: 2px; text-transform: uppercase;">
+            SECTION: ${deptTitle}
+          </div>
+          <div style="font-size: 9px; margin-top: 2px;">
+            DATE: ${reconciliationDate} | PRINT: ${printTime}
+          </div>
+          <div style="font-size: 9px;">
+            STAFF: ${staffName}
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>ITEM</th>
+              <th>OPN</th>
+              <th>IN</th>
+              <th>OUT</th>
+              <th>CLS</th>
+              ${printIncludeValues ? `<th>VAL</th>` : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsToPrint.map(m => `
+              <tr>
+                <td>${m.itemName}</td>
+                <td>${m.openingStock}</td>
+                <td>${m.receivedStock > 0 ? `+${m.receivedStock}` : '0'}</td>
+                <td>${m.soldStock > 0 ? `-${m.soldStock}` : '0'}</td>
+                <td style="font-weight: 900;">${m.closingStock}</td>
+                ${printIncludeValues ? `<td>${m.dispatchedValue.toLocaleString()}</td>` : ''}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div style="border-top: 2px solid #000; margin-top: 6px; padding-top: 4px; font-size: 9px;">
+          <div style="display: flex; justify-content: space-between; font-weight: bold;">
+            <span>TOTAL ITEMS:</span> <span>${itemsToPrint.length}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>OPENING STOCK:</span> <span>${totOpening}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>RECEIVED (+):</span> <span>+${totReceived}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>SOLD (-):</span> <span>-${totSold}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>ADJUSTMENTS:</span> <span>${totAdjustments >= 0 ? `+${totAdjustments}` : totAdjustments}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-weight: 900; border-top: 1px dashed #000; padding-top: 2px; margin-top: 2px;">
+            <span>CLOSING STOCK:</span> <span>${totClosing}</span>
+          </div>
+          ${printIncludeValues ? `
+          <div style="display: flex; justify-content: space-between; font-weight: 900; font-size: 11px; margin-top: 3px; border-top: 1px solid #000; padding-top: 2px;">
+            <span>TOTAL SALES:</span> <span>RWF ${totValue.toLocaleString()}</span>
+          </div>
+          ` : ''}
+        </div>
+
+        ${printIncludeSignatures ? `
+        <div style="border-top: 1px dashed #000; margin-top: 15px; padding-top: 8px; font-size: 9px;">
+          <div style="margin-bottom: 15px;">Stock Keeper: ___________________</div>
+          <div>Manager Sign: ___________________</div>
+        </div>
+        ` : ''}
+
+        <div style="text-align: center; margin-top: 12px; font-size: 8px; border-top: 1px dotted #888; padding-top: 4px;">
+          Seven to Seven • Sky View Resort
+        </div>
+      `;
+
+      printReportHTML(`Stock Balance Sheet - ${reconciliationDate}`, html);
+    } else {
+      // Standard A4 Format
+      const html = `
+        <style>
+          @page { size: A4 portrait; margin: 10mm; }
+          body { font-family: Arial, sans-serif; font-size: 12px; color: #111827; margin: 0; padding: 10px; }
+          .header { text-align: center; border-bottom: 3px double #111827; padding-bottom: 10px; margin-bottom: 15px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+          th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 6px 8px; font-weight: bold; text-align: center; }
+          td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: center; }
+          td.item-name { text-align: left; font-weight: bold; }
+          .total-row { background: #f9fafb; font-weight: bold; border-top: 2px solid #111827; font-size: 12px; }
+        </style>
+
+        <div class="header">
+          <h1 style="font-size: 22px; font-weight: 900; margin: 0; text-transform: uppercase;">SEVEN TO SEVEN</h1>
+          <h3 style="font-size: 14px; margin: 2px 0 8px 0; color: #4b5563;">Sky View Resort • Kamonyi-Runda</h3>
+          <div style="font-size: 13px; font-weight: 900; background: #111827; color: #ffffff; padding: 4px 12px; display: inline-block; border-radius: 4px; text-transform: uppercase;">
+            DAILY STOCK BALANCE SHEET & RECONCILIATION
+          </div>
+          <div style="font-size: 12px; font-weight: bold; margin-top: 8px;">
+            DEPARTMENT: ${deptTitle.toUpperCase()}
+          </div>
+          <div style="font-size: 11px; margin-top: 4px; color: #6b7280;">
+            Target Date: <strong>${reconciliationDate}</strong> | Printed On: ${new Date().toLocaleString()} | Printed By: <strong>${staffName}</strong>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align: left;">Item Name</th>
+              <th style="text-align: left;">Category</th>
+              <th>Opening</th>
+              <th style="color: #059669;">+ Received</th>
+              <th style="color: #d97706;">- Sold</th>
+              <th>± Adjustments</th>
+              <th style="color: #0284c7;">= Closing</th>
+              ${printIncludeValues ? `<th style="text-align: right;">Sales Value (RWF)</th>` : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsToPrint.map(m => `
+              <tr>
+                <td class="item-name">${m.itemName}</td>
+                <td style="text-align: left;">${m.category}</td>
+                <td>${m.openingStock}</td>
+                <td style="color: #059669; font-weight: bold;">${m.receivedStock > 0 ? `+${m.receivedStock}` : '0'}</td>
+                <td style="color: #d97706; font-weight: bold;">${m.soldStock > 0 ? `-${m.soldStock}` : '0'}</td>
+                <td>${m.adjustments >= 0 ? `+${m.adjustments}` : m.adjustments}</td>
+                <td style="font-weight: 900; color: #0284c7;">${m.closingStock}</td>
+                ${printIncludeValues ? `<td style="text-align: right; font-weight: bold;">${m.dispatchedValue.toLocaleString()}</td>` : ''}
+              </tr>
+            `).join('')}
+            <tr class="total-row">
+              <td colspan="2" style="text-align: left; padding: 10px;">GRAND TOTALS (${itemsToPrint.length} Items)</td>
+              <td>${totOpening}</td>
+              <td style="color: #059669;">+${totReceived}</td>
+              <td style="color: #d97706;">-${totSold}</td>
+              <td>${totAdjustments >= 0 ? `+${totAdjustments}` : totAdjustments}</td>
+              <td style="color: #0284c7; font-size: 14px;">${totClosing}</td>
+              ${printIncludeValues ? `<td style="text-align: right; color: #059669; font-size: 14px;">RWF ${totValue.toLocaleString()}</td>` : ''}
+            </tr>
+          </tbody>
+        </table>
+
+        ${printIncludeSignatures ? `
+        <div style="display: flex; justify-content: space-between; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+          <div style="text-align: center; width: 40%;">
+            <div style="border-bottom: 1px solid #111827; margin-bottom: 6px; height: 35px;"></div>
+            <strong>Stock Keeper / Store Officer</strong>
+            <div style="font-size: 10px; color: #6b7280;">Sign & Date</div>
+          </div>
+          <div style="text-align: center; width: 40%;">
+            <div style="border-bottom: 1px solid #111827; margin-bottom: 6px; height: 35px;"></div>
+            <strong>Hotel Manager / Supervisor</strong>
+            <div style="font-size: 10px; color: #6b7280;">Sign & Date</div>
+          </div>
+        </div>
+        ` : ''}
+      `;
+
+      printReportHTML(`Stock Balance Sheet - ${reconciliationDate}`, html);
+    }
+
+    setShowPrintModal(false);
+  };
   
   // Stock Intake/Adjustment Modal
   const [selectedItemForModal, setSelectedItemForModal] = useState<MenuItem | null>(null);
@@ -522,7 +833,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
           <div className={`p-6 rounded-2xl border transition-colors ${
             darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
               <div>
                 <div className="flex items-center space-x-2">
                   <Calendar className="w-5 h-5 text-emerald-500" />
@@ -535,7 +846,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700">
                   <span className="text-xs font-bold text-gray-500 pl-2">Date:</span>
                   <input
@@ -547,9 +858,25 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                 </div>
 
                 <button
+                  onClick={() => setShowPrintModal(true)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center space-x-1.5 shadow-md shadow-amber-500/20 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Balance Sheet</span>
+                </button>
+
+                <button
                   onClick={() => {
                     const stockMovements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
-                    const filtered = stockMovements.filter(m => (selectedCategory === 'All' || m.category === selectedCategory) && m.itemName.toLowerCase().includes(searchQuery.toLowerCase()));
+                    const filtered = stockMovements.filter(m => {
+                      const matchesCat = selectedCategory === 'All' || m.category === selectedCategory;
+                      const matchesSearch = m.itemName.toLowerCase().includes(searchQuery.toLowerCase());
+                      let matchesDept = true;
+                      if (selectedDeptFilter === 'Kitchen') matchesDept = isKitchenItem(m);
+                      else if (selectedDeptFilter === 'Bar') matchesDept = isBarItem(m);
+                      else if (selectedDeptFilter === 'Other') matchesDept = !isKitchenItem(m) && !isBarItem(m);
+                      return matchesCat && matchesSearch && matchesDept;
+                    });
                     const headers = ['Item Name', 'Category', 'Opening Stock', 'Received (Stock In)', 'Sold (Stock Out)', 'Adjustments (+/-)', 'Closing Stock', 'Current Stock', 'Sales Value (RWF)'];
                     const rows = filtered.map(m => [
                       `"${m.itemName}"`,
@@ -566,7 +893,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                     const encodedUri = encodeURI(csvContent);
                     const link = document.createElement('a');
                     link.setAttribute('href', encodedUri);
-                    link.setAttribute('download', `Stock_Balance_${reconciliationDate}.csv`);
+                    link.setAttribute('download', `Stock_Balance_${selectedDeptFilter}_${reconciliationDate}.csv`);
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -579,10 +906,147 @@ export const StockManagement: React.FC<StockManagementProps> = ({
               </div>
             </div>
 
+            {/* Department Selection Filter Tabs */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 mb-5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs font-bold text-gray-500 mr-2 flex items-center gap-1">
+                  <Filter className="w-3.5 h-3.5" />
+                  <span>Department:</span>
+                </span>
+
+                <button
+                  onClick={() => {
+                    setSelectedDeptFilter('All');
+                    setPrintDeptSelection('All');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                    selectedDeptFilter === 'All'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>All Departments</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSelectedDeptFilter('Kitchen');
+                    setPrintDeptSelection('Kitchen');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                    selectedDeptFilter === 'Kitchen'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <Utensils className="w-3.5 h-3.5 text-orange-500" />
+                  <span>Igikoni / Kitchen Stock</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSelectedDeptFilter('Bar');
+                    setPrintDeptSelection('Bar');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                    selectedDeptFilter === 'Bar'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <Wine className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Akabari / Bar Stock</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSelectedDeptFilter('Other');
+                    setPrintDeptSelection('Other');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                    selectedDeptFilter === 'Other'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5 text-sky-500" />
+                  <span>Other Services</span>
+                </button>
+              </div>
+
+              {/* Custom Selection Toggle & Actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    const next = !customSelectMode;
+                    setCustomSelectMode(next);
+                    if (next) {
+                      setPrintDeptSelection('Custom');
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 border transition-all cursor-pointer ${
+                    customSelectMode
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700'
+                  }`}
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  <span>{customSelectMode ? 'Custom Selection Active' : 'Choose What to Print'}</span>
+                </button>
+
+                {customSelectMode && (
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={handleSelectKitchenOnly}
+                      className="px-2 py-1 rounded text-[10px] font-bold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20"
+                    >
+                      Kitchen Only
+                    </button>
+                    <button
+                      onClick={handleSelectBarOnly}
+                      className="px-2 py-1 rounded text-[10px] font-bold bg-purple-500/10 text-purple-600 hover:bg-purple-500/20"
+                    >
+                      Bar Only
+                    </button>
+                    <button
+                      onClick={handleSelectActiveOnly}
+                      className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20"
+                    >
+                      Active Today
+                    </button>
+                    <button
+                      onClick={handleDeselectAll}
+                      className="px-2 py-1 rounded text-[10px] font-bold bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                    >
+                      Clear
+                    </button>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500 text-white">
+                      {selectedItemIds.size} Selected
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Reconciliation KPI Summary Cards */}
             {(() => {
               const movements = calculateStockMovementsForDate(menuItems, stockLogs, orders, reconciliationDate);
-              const filtered = movements.filter(m => (selectedCategory === 'All' || m.category === selectedCategory) && m.itemName.toLowerCase().includes(searchQuery.toLowerCase()));
+              
+              let filtered = movements.filter(m => {
+                const matchesCat = selectedCategory === 'All' || m.category === selectedCategory;
+                const matchesSearch = m.itemName.toLowerCase().includes(searchQuery.toLowerCase());
+                let matchesDept = true;
+                if (selectedDeptFilter === 'Kitchen') matchesDept = isKitchenItem(m);
+                else if (selectedDeptFilter === 'Bar') matchesDept = isBarItem(m);
+                else if (selectedDeptFilter === 'Other') matchesDept = !isKitchenItem(m) && !isBarItem(m);
+                return matchesCat && matchesSearch && matchesDept;
+              });
+
+              if (customSelectMode && selectedItemIds.size > 0) {
+                filtered = filtered.filter(m => selectedItemIds.has(m.itemId));
+              }
+
               const totOpening = filtered.reduce((sum, m) => sum + m.openingStock, 0);
               const totReceived = filtered.reduce((sum, m) => sum + m.receivedStock, 0);
               const totSold = filtered.reduce((sum, m) => sum + m.soldStock, 0);
@@ -644,11 +1108,32 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                     </div>
                   </div>
 
+                  {/* Quick Filter Info Notice */}
+                  {customSelectMode && (
+                    <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs flex justify-between items-center text-indigo-700 dark:text-indigo-300">
+                      <div className="flex items-center space-x-2">
+                        <CheckSquare className="w-4 h-4 text-indigo-500" />
+                        <span>
+                          Custom Item Selection Mode is active. Tick items below to choose exactly what to print.
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleSelectAllFiltered(filtered)}
+                        className="px-2.5 py-1 rounded bg-indigo-600 text-white font-bold text-[10px] hover:bg-indigo-700"
+                      >
+                        Select All Visible ({filtered.length})
+                      </button>
+                    </div>
+                  )}
+
                   {/* Stock Reconciliation Table */}
                   <div className="overflow-x-auto border border-gray-200 dark:border-gray-800 rounded-xl">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-gray-100 dark:bg-gray-800/80 uppercase text-[10px] font-bold text-gray-500">
                         <tr>
+                          {customSelectMode && (
+                            <th className="py-3 px-3 text-center w-10">Select</th>
+                          )}
                           <th className="py-3 px-3">Item / Product Name</th>
                           <th className="py-3 px-3">Category</th>
                           <th className="py-3 px-3 text-center bg-gray-200/50 dark:bg-gray-700/50 text-slate-900 dark:text-white">
@@ -672,48 +1157,76 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-medium">
                         {filtered.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="py-8 text-center text-gray-400">
-                              No items found for category "{selectedCategory}".
+                            <td colSpan={customSelectMode ? 9 : 8} className="py-8 text-center text-gray-400">
+                              No items found for department "{selectedDeptFilter}".
                             </td>
                           </tr>
                         ) : (
-                          filtered.map(m => (
-                            <tr key={m.itemId} className="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-                              <td className="py-3 px-3 font-bold text-gray-900 dark:text-white">
-                                {m.itemName}
-                              </td>
-                              <td className="py-3 px-3 text-gray-500">
-                                <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px]">
-                                  {m.category}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3 text-center font-bold font-mono text-gray-800 dark:text-gray-200 bg-gray-50/50 dark:bg-gray-800/30">
-                                {m.openingStock} {m.unit}s
-                              </td>
-                              <td className="py-3 px-3 text-center font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/5">
-                                {m.receivedStock > 0 ? `+${m.receivedStock}` : 0}
-                              </td>
-                              <td className="py-3 px-3 text-center font-bold font-mono text-amber-600 dark:text-amber-400 bg-amber-500/5">
-                                {m.soldStock}
-                                {m.pendingQty > 0 && (
-                                  <span className="block text-[9px] text-amber-500 font-normal">
-                                    ({m.paidQty} Paid + {m.pendingQty} Open)
-                                  </span>
+                          filtered.map(m => {
+                            const isSelected = selectedItemIds.has(m.itemId);
+                            return (
+                              <tr 
+                                key={m.itemId} 
+                                className={`hover:bg-gray-50 dark:hover:bg-gray-800/40 cursor-pointer ${
+                                  isSelected ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : ''
+                                }`}
+                                onClick={() => {
+                                  if (customSelectMode) {
+                                    toggleItemSelection(m.itemId);
+                                  }
+                                }}
+                              >
+                                {customSelectMode && (
+                                  <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleItemSelection(m.itemId)}
+                                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                    />
+                                  </td>
                                 )}
-                              </td>
-                              <td className="py-3 px-3 text-center font-bold font-mono bg-purple-500/5">
-                                <span className={m.adjustments > 0 ? 'text-purple-600 dark:text-purple-400' : m.adjustments < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-400'}>
-                                  {m.adjustments > 0 ? `+${m.adjustments}` : m.adjustments}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3 text-center font-black font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 text-sm">
-                                {m.closingStock}
-                              </td>
-                              <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                                {formatCurrency(m.dispatchedValue)}
-                              </td>
-                            </tr>
-                          ))
+                                <td className="py-3 px-3 font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+                                  <span>{m.itemName}</span>
+                                  {isKitchenItem(m) ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] bg-orange-500/10 text-orange-600 font-bold">Kitchen</span>
+                                  ) : isBarItem(m) ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-500/10 text-purple-600 font-bold">Bar</span>
+                                  ) : null}
+                                </td>
+                                <td className="py-3 px-3 text-gray-500">
+                                  <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px]">
+                                    {m.category}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-center font-bold font-mono text-gray-800 dark:text-gray-200 bg-gray-50/50 dark:bg-gray-800/30">
+                                  {m.openingStock} {m.unit}s
+                                </td>
+                                <td className="py-3 px-3 text-center font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/5">
+                                  {m.receivedStock > 0 ? `+${m.receivedStock}` : 0}
+                                </td>
+                                <td className="py-3 px-3 text-center font-bold font-mono text-amber-600 dark:text-amber-400 bg-amber-500/5">
+                                  {m.soldStock}
+                                  {m.pendingQty > 0 && (
+                                    <span className="block text-[9px] text-amber-500 font-normal">
+                                      ({m.paidQty} Paid + {m.pendingQty} Open)
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-center font-bold font-mono bg-purple-500/5">
+                                  <span className={m.adjustments > 0 ? 'text-purple-600 dark:text-purple-400' : m.adjustments < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-400'}>
+                                    {m.adjustments > 0 ? `+${m.adjustments}` : m.adjustments}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-center font-black font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 text-sm">
+                                  {m.closingStock}
+                                </td>
+                                <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                                  {formatCurrency(m.dispatchedValue)}
+                                </td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
@@ -920,6 +1433,196 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* PRINT BALANCE SHEET CONFIGURATION MODAL */}
+      {showPrintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+          <div className={`max-w-xl w-full rounded-2xl p-6 shadow-2xl border space-y-5 transition-colors ${
+            darkMode ? 'bg-slate-900 text-white border-slate-800' : 'bg-white text-gray-900 border-gray-200'
+          }`}>
+            <div className="flex justify-between items-center border-b pb-3 border-gray-200 dark:border-gray-800">
+              <div className="flex items-center space-x-2">
+                <Printer className="w-5 h-5 text-amber-500" />
+                <h3 className="font-bold text-base text-gray-900 dark:text-white">
+                  Print Stock Balance Sheet
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowPrintModal(false)}
+                className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white cursor-pointer"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {/* Department Selection */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-2">
+                Choose Department Report / Hitamo Igice
+              </label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPrintDeptSelection('All')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
+                    printDeptSelection === 'All'
+                      ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <Layers className="w-4 h-4" />
+                  <span>All Items</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPrintDeptSelection('Kitchen')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
+                    printDeptSelection === 'Kitchen'
+                      ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <Utensils className="w-4 h-4 text-orange-500" />
+                  <span>Kitchen Only</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPrintDeptSelection('Bar')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
+                    printDeptSelection === 'Bar'
+                      ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-xs'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <Wine className="w-4 h-4 text-purple-500" />
+                  <span>Bar Only</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPrintDeptSelection('Custom')}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
+                    printDeptSelection === 'Custom'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <CheckSquare className="w-4 h-4 text-indigo-400" />
+                  <span>Selected ({selectedItemIds.size})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Paper Size Selection */}
+            <div>
+              <label className="block text-xs font-bold uppercase text-gray-500 mb-2">
+                Paper Size / Size y'Ipapuro
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPrintPaperFormat('80mm')}
+                  className={`p-3 rounded-xl border text-left flex items-center space-x-3 transition-all cursor-pointer ${
+                    printPaperFormat === '80mm'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300 ring-2 ring-amber-500/30'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-600 font-bold text-xs">
+                    80mm
+                  </div>
+                  <div>
+                    <span className="font-bold text-xs block">Thermal Receipt (80mm)</span>
+                    <span className="text-[10px] text-gray-500">POS printer roll standard paper</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPrintPaperFormat('A4')}
+                  className={`p-3 rounded-xl border text-left flex items-center space-x-3 transition-all cursor-pointer ${
+                    printPaperFormat === 'A4'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-amber-300 ring-2 ring-amber-500/30'
+                      : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-600 font-bold text-xs">
+                    A4
+                  </div>
+                  <div>
+                    <span className="font-bold text-xs block">Full A4 Sheet Document</span>
+                    <span className="text-[10px] text-gray-500">Official office printer sheet</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Print Options */}
+            <div className="space-y-2 bg-gray-50 dark:bg-gray-800/60 p-3 rounded-xl border border-gray-200 dark:border-gray-700 text-xs">
+              <span className="font-bold text-gray-500 text-[10px] uppercase block mb-1">Print Content Options</span>
+              
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={printHideZeroMovement}
+                  onChange={(e) => setPrintHideZeroMovement(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-amber-500"
+                />
+                <span className="text-gray-700 dark:text-gray-300">Hide items with no stock activity on date</span>
+              </label>
+
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={printIncludeValues}
+                  onChange={(e) => setPrintIncludeValues(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-amber-500"
+                />
+                <span className="text-gray-700 dark:text-gray-300">Include Sales Values & Monetary Amounts</span>
+              </label>
+
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={printIncludeSignatures}
+                  onChange={(e) => setPrintIncludeSignatures(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-amber-500"
+                />
+                <span className="text-gray-700 dark:text-gray-300">Include Signature Lines for Store Keeper & Manager</span>
+              </label>
+            </div>
+
+            {/* Preview Banner */}
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs flex justify-between items-center text-amber-800 dark:text-amber-200 font-bold">
+              <span>Ready to print for SEVEN TO SEVEN - Sky View Resort</span>
+              <span className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 text-[10px]">
+                {reconciliationDate}
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowPrintModal(false)}
+                className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePrintStockBalanceSheet}
+                className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Report Now</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
