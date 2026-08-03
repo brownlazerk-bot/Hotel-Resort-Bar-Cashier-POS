@@ -189,15 +189,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
           >
             {/* Header / Business Information */}
             <div className="text-center space-y-0.5 mb-2">
-              <h2 className="font-black text-sm tracking-wider uppercase text-black">
-                SKY VIEW RESORT APARTMENT
+              <h2 className="font-black text-base tracking-wider uppercase text-black">
+                SEVEN TO SEVEN
               </h2>
+              <p className="text-[10px] font-bold text-black uppercase tracking-wide">
+                Sky View Resort
+              </p>
               <p className="text-[10px] font-black text-black uppercase">
                 HOTEL • RESTAURANT • BAR • LOUNGE
               </p>
               <p className="text-[10px] text-black">KAMONYI-RUNDA</p>
               <p className="text-[10px] font-black text-black">Pay or Call Waiter: 0799712642</p>
-              <p className="text-[10px] font-black text-black">TIN: 109823741</p>
+              <p className="text-[10px] font-black text-black">TIN: 156404753</p>
             </div>
 
             {/* Receipt Information Section */}
@@ -333,13 +336,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
                 Served By : {waiterName}
               </p>
               <p className="text-[10px] font-black uppercase text-black pt-1">
-                Thank you for visiting Sky View Resort Apartment.
+                Thank you for visiting Seven to Seven (Sky View Resort).
               </p>
               <p className="text-[10px] font-bold text-black">
                 We appreciate your business.
-              </p>
-              <p className="text-[8px] font-normal text-black pt-1">
-                Software by AI Studio POS Systems
               </p>
             </div>
           </div>

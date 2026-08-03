@@ -130,7 +130,10 @@ export function printKotThermalTicket(
           <!-- Double Header Box -->
           <div class="border-double text-center">
             <div class="font-black uppercase" style="font-size: 15px;">
-              SKY VIEW RESORT APARTMENT
+              SEVEN TO SEVEN
+            </div>
+            <div class="font-bold uppercase" style="font-size: 11px;">
+              Sky View Resort
             </div>
             <div class="font-black uppercase" style="font-size: 16px; margin-top: 2px;">
               KITCHEN ORDER ${ticketType !== 'NEW ORDER' ? `(${ticketType})` : ''}

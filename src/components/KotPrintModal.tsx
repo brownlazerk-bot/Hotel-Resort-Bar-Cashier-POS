@@ -69,8 +69,11 @@ export const KotPrintModal: React.FC<KotPrintModalProps> = ({
             {/* Double Border Header */}
             <div className="border-y-2 border-black py-2 my-1 text-center">
               <h2 className="font-black text-sm uppercase tracking-wider text-black">
-                SKY VIEW RESORT APARTMENT
+                SEVEN TO SEVEN
               </h2>
+              <p className="font-bold text-xs uppercase text-black">
+                Sky View Resort
+              </p>
               <h3 className="font-black text-base uppercase tracking-wider text-black mt-0.5">
                 KITCHEN ORDER {ticketType !== 'NEW ORDER' ? `(${ticketType})` : ''}
               </h3>
