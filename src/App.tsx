@@ -874,6 +874,59 @@ export default function App() {
     }
   };
 
+  // Directly Record & Edit Main Beverage Stock Quantity & Properties
+  const handleUpdateMainStock = (
+    itemId: string,
+    newMainQty: number,
+    reason: string,
+    additionalEdits?: { price?: number; costPrice?: number; unit?: string; minStockAlert?: number }
+  ) => {
+    const targetIdx = menuItems.findIndex(m => m.id === itemId);
+    if (targetIdx === -1) return;
+
+    const prevMain = menuItems[targetIdx].mainStockQuantity || 0;
+    const diff = newMainQty - prevMain;
+
+    const updatedItems = [...menuItems];
+    updatedItems[targetIdx] = {
+      ...updatedItems[targetIdx],
+      mainStockQuantity: Math.max(0, newMainQty),
+      ...(additionalEdits?.price !== undefined ? { price: additionalEdits.price } : {}),
+      ...(additionalEdits?.costPrice !== undefined ? { costPrice: additionalEdits.costPrice } : {}),
+      ...(additionalEdits?.unit !== undefined ? { unit: additionalEdits.unit } : {}),
+      ...(additionalEdits?.minStockAlert !== undefined ? { minStockAlert: additionalEdits.minStockAlert } : {})
+    };
+
+    const newLog: StockAdjustmentLog = {
+      id: `log-main-${Date.now()}`,
+      itemId,
+      itemName: menuItems[targetIdx].name,
+      type: diff >= 0 ? 'Purchase' : 'Adjustment',
+      quantityChange: diff,
+      previousStock: prevMain,
+      newStock: Math.max(0, newMainQty),
+      sourceLocation: 'Main Beverage Stock',
+      reason: reason || 'Main Beverage Stock Direct Record/Edit',
+      timestamp: new Date().toISOString(),
+      actor: currentShift?.cashierName || currentUser?.fullName || 'Storekeeper'
+    };
+
+    updateMenuItemsState(updatedItems);
+    updateStockLogsState([newLog, ...stockLogs]);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Record/Edit Main Beverage Stock',
+        category: 'Inventory',
+        details: `Updated Main Beverage Stock for ${menuItems[targetIdx].name}: Old Stock=${prevMain}, New Stock=${newMainQty} (${diff >= 0 ? '+' : ''}${diff}) - Reason: ${reason}`
+      });
+    }
+  };
+
   // Create Purchase Order
   const handleCreatePurchaseOrder = (newPOData: Omit<PurchaseOrder, 'id' | 'poNumber' | 'timestamp'>) => {
     const newPO: PurchaseOrder = {
@@ -1359,6 +1412,7 @@ export default function App() {
             tables={tables}
             waiters={waiters}
             onUpdateStock={handleUpdateStock}
+            onUpdateMainStock={handleUpdateMainStock}
             onTransferStock={handleTransferStock}
             onCreatePurchaseOrder={handleCreatePurchaseOrder}
             onReceivePurchaseOrder={handleReceivePurchaseOrder}

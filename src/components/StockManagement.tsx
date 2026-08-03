@@ -35,6 +35,12 @@ interface StockManagementProps {
   tables?: Table[];
   waiters?: Waiter[];
   onUpdateStock: (itemId: string, qtyChange: number, type: StockAdjustmentLog['type'], reason: string) => void;
+  onUpdateMainStock?: (
+    itemId: string,
+    newMainQty: number,
+    reason: string,
+    additionalEdits?: { price?: number; costPrice?: number; unit?: string; minStockAlert?: number }
+  ) => void;
   onTransferStock?: (itemId: string, quantity: number, reason: string) => void;
   onCreatePurchaseOrder?: (po: Omit<PurchaseOrder, 'id' | 'poNumber' | 'timestamp'>) => void;
   onReceivePurchaseOrder?: (poId: string) => void;
@@ -52,6 +58,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   tables = [],
   waiters = [],
   onUpdateStock,
+  onUpdateMainStock,
   onTransferStock,
   onCreatePurchaseOrder,
   onReceivePurchaseOrder,
@@ -63,6 +70,17 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<
     'main_beverage' | 'kitchen_stock' | 'purchasing' | 'transfers_log' | 'available' | 'unpaid_reserved' | 'reconciliation' | 'logs'
   >('main_beverage');
+
+  // Main Beverage Stock Console / Recording & Edit State
+  const [showMainStockModal, setShowMainStockModal] = useState<boolean>(false);
+  const [mainStockItemId, setMainStockItemId] = useState<string>('');
+  const [mainStockMode, setMainStockMode] = useState<'set' | 'add' | 'subtract'>('set');
+  const [mainStockQuantityValue, setMainStockQuantityValue] = useState<number>(0);
+  const [mainStockReason, setMainStockReason] = useState<string>('Physical Store Inventory Count');
+  const [mainStockPrice, setMainStockPrice] = useState<number>(0);
+  const [mainStockCostPrice, setMainStockCostPrice] = useState<number>(0);
+  const [mainStockUnit, setMainStockUnit] = useState<string>('bottle');
+  const [mainStockMinAlert, setMainStockMinAlert] = useState<number>(10);
 
   // Stock Transfer Modal State
   const [showTransferModal, setShowTransferModal] = useState<boolean>(false);
@@ -410,6 +428,70 @@ export const StockManagement: React.FC<StockManagementProps> = ({
     }
 
     setShowPrintModal(false);
+  };
+
+  // Open Record & Edit Main Beverage Stock Console Modal
+  const openMainStockModal = (item?: MenuItem) => {
+    const barItems = menuItems.filter(m => isBarItem(m));
+    const target = item || (barItems.length > 0 ? barItems[0] : null);
+    if (target) {
+      setMainStockItemId(target.id);
+      setMainStockQuantityValue(target.mainStockQuantity || 0);
+      setMainStockPrice(target.price || 0);
+      setMainStockCostPrice(target.costPrice || Math.round(target.price * 0.6));
+      setMainStockUnit(target.unit || 'bottle');
+      setMainStockMinAlert(target.minStockAlert || 10);
+    }
+    setMainStockMode('set');
+    setMainStockReason('Physical Store Inventory Audit / Direct Recording');
+    setShowMainStockModal(true);
+  };
+
+  const handleMainStockItemChange = (itemId: string) => {
+    setMainStockItemId(itemId);
+    const target = menuItems.find(m => m.id === itemId);
+    if (target) {
+      setMainStockQuantityValue(target.mainStockQuantity || 0);
+      setMainStockPrice(target.price || 0);
+      setMainStockCostPrice(target.costPrice || Math.round(target.price * 0.6));
+      setMainStockUnit(target.unit || 'bottle');
+      setMainStockMinAlert(target.minStockAlert || 10);
+    }
+  };
+
+  const handleMainStockSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mainStockItemId) {
+      alert('Please select a beverage product.');
+      return;
+    }
+
+    const targetItem = menuItems.find(m => m.id === mainStockItemId);
+    if (!targetItem) return;
+
+    const currentMain = targetItem.mainStockQuantity || 0;
+    let finalQty = mainStockQuantityValue;
+
+    if (mainStockMode === 'add') {
+      finalQty = currentMain + mainStockQuantityValue;
+    } else if (mainStockMode === 'subtract') {
+      finalQty = Math.max(0, currentMain - mainStockQuantityValue);
+    }
+
+    if (onUpdateMainStock) {
+      onUpdateMainStock(mainStockItemId, finalQty, mainStockReason, {
+        price: mainStockPrice,
+        costPrice: mainStockCostPrice,
+        unit: mainStockUnit,
+        minStockAlert: mainStockMinAlert
+      });
+    } else {
+      const diff = finalQty - currentMain;
+      onUpdateStock(mainStockItemId, diff, 'Adjustment', `[Main Beverage Stock Console] ${mainStockReason}`);
+    }
+
+    setShowMainStockModal(false);
+    alert(`Main Beverage Stock for "${targetItem.name}" updated successfully to ${finalQty} ${mainStockUnit}s!`);
   };
 
   // Open Stock Transfer Modal
@@ -871,6 +953,13 @@ export const StockManagement: React.FC<StockManagementProps> = ({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
+                onClick={() => openMainStockModal()}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs flex items-center space-x-2 shadow-lg shadow-amber-500/30 transition-all cursor-pointer"
+              >
+                <Boxes className="w-4 h-4 text-slate-950" />
+                <span>✏️ Record & Edit Main Stock</span>
+              </button>
+              <button
                 onClick={() => openPOModal('Bar / Beverage')}
                 className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
               >
@@ -879,7 +968,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
               </button>
               <button
                 onClick={() => openTransferModal()}
-                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-2 shadow-lg shadow-amber-500/30 transition-all cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center space-x-2 shadow-lg shadow-purple-600/30 transition-all cursor-pointer"
               >
                 <ArrowRightLeft className="w-4 h-4" />
                 <span>Export / Transfer to Bar</span>
@@ -958,13 +1047,24 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                           {formatCurrency(item.price)}
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <button
-                            onClick={() => openTransferModal(item)}
-                            className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[11px] inline-flex items-center space-x-1 shadow-sm transition-all cursor-pointer"
-                          >
-                            <ArrowRightLeft className="w-3.5 h-3.5" />
-                            <span>Export to Bar</span>
-                          </button>
+                          <div className="flex justify-end items-center gap-1.5">
+                            <button
+                              onClick={() => openMainStockModal(item)}
+                              className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] inline-flex items-center space-x-1 shadow-sm transition-all cursor-pointer"
+                              title="Edit / Record Main Beverage Stock"
+                            >
+                              <Boxes className="w-3.5 h-3.5" />
+                              <span>Edit Main Stock</span>
+                            </button>
+                            <button
+                              onClick={() => openTransferModal(item)}
+                              className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[11px] inline-flex items-center space-x-1 shadow-sm transition-all cursor-pointer"
+                              title="Export / Transfer to Bar Stock"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                              <span>Export to Bar</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -2444,6 +2544,238 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                 <span>Print Report Now</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD & EDIT MAIN BEVERAGE STOCK CONSOLE MODAL */}
+      {showMainStockModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className={`max-w-lg w-full rounded-2xl p-6 border shadow-2xl space-y-4 ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-gray-900'
+          }`}>
+            <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base">Record & Edit Main Beverage Stock</h3>
+                  <p className="text-xs text-gray-400">Directly record physical stock counts or update item details in Store</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMainStockModal(false)}
+                className="text-gray-400 hover:text-white font-bold text-xl cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleMainStockSubmit} className="space-y-4">
+              {/* Select Beverage Product */}
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Select Beverage Item (Product)
+                </label>
+                <select
+                  value={mainStockItemId}
+                  onChange={(e) => handleMainStockItemChange(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                  required
+                >
+                  {menuItems.filter(m => isBarItem(m)).map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({item.category}) — Store Stock: {item.mainStockQuantity || 0} {item.unit || 'pcs'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Current Status Badge Cards */}
+              {mainStockItemId && (() => {
+                const selectedItem = menuItems.find(m => m.id === mainStockItemId);
+                if (!selectedItem) return null;
+                const curMain = selectedItem.mainStockQuantity || 0;
+                const curBar = selectedItem.stockQuantity || 0;
+
+                return (
+                  <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-gray-400 font-bold uppercase">Main Stock (Store)</span>
+                      <p className="text-base font-black text-indigo-400">{curMain} {selectedItem.unit || 'pcs'}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] text-gray-400 font-bold uppercase">Bar Stock (Selling)</span>
+                      <p className="text-base font-black text-emerald-400">{curBar} {selectedItem.unit || 'pcs'}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Recording Action Mode */}
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Stock Recording Action
+                </label>
+                <div className="grid grid-cols-3 gap-2 bg-slate-950/50 p-1 rounded-xl border border-slate-800 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setMainStockMode('set')}
+                    className={`py-2 px-2 rounded-lg text-center transition-all cursor-pointer ${
+                      mainStockMode === 'set'
+                        ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    🎯 Direct Set Exact
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainStockMode('add')}
+                    className={`py-2 px-2 rounded-lg text-center transition-all cursor-pointer ${
+                      mainStockMode === 'add'
+                        ? 'bg-emerald-600 text-white shadow-md font-black'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    ➕ Add Intake (+Qty)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMainStockMode('subtract')}
+                    className={`py-2 px-2 rounded-lg text-center transition-all cursor-pointer ${
+                      mainStockMode === 'subtract'
+                        ? 'bg-rose-600 text-white shadow-md font-black'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    ➖ Deduct Loss (-Qty)
+                  </button>
+                </div>
+              </div>
+
+              {/* Quantity Input */}
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  {mainStockMode === 'set' && 'New Total Main Stock Quantity'}
+                  {mainStockMode === 'add' && 'Quantity to Add to Main Stock'}
+                  {mainStockMode === 'subtract' && 'Quantity to Deduct from Main Stock'}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={mainStockQuantityValue}
+                  onChange={(e) => setMainStockQuantityValue(Math.max(0, parseInt(e.target.value) || 0))}
+                  className={`w-full p-2.5 rounded-xl border text-sm font-black ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                  required
+                />
+              </div>
+
+              {/* Price & Cost Edit Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Selling Price (RWF)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={mainStockPrice}
+                    onChange={(e) => setMainStockPrice(parseInt(e.target.value) || 0)}
+                    className={`w-full p-2 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Purchase / Unit Cost (RWF)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={mainStockCostPrice}
+                    onChange={(e) => setMainStockCostPrice(parseInt(e.target.value) || 0)}
+                    className={`w-full p-2 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Packaging Unit & Min Alert Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Packaging Unit
+                  </label>
+                  <input
+                    type="text"
+                    value={mainStockUnit}
+                    onChange={(e) => setMainStockUnit(e.target.value)}
+                    placeholder="e.g. bottle, crate, glass"
+                    className={`w-full p-2 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Min Stock Alert Threshold
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={mainStockMinAlert}
+                    onChange={(e) => setMainStockMinAlert(parseInt(e.target.value) || 10)}
+                    className={`w-full p-2 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Reason / Notes */}
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Reason for Adjustment / Audit Note
+                </label>
+                <input
+                  type="text"
+                  value={mainStockReason}
+                  onChange={(e) => setMainStockReason(e.target.value)}
+                  placeholder="e.g. Physical Store Count, Supplier Delivery, Damage"
+                  className={`w-full p-2.5 rounded-xl border text-xs ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                  required
+                />
+              </div>
+
+              {/* Submit / Cancel Buttons */}
+              <div className="flex space-x-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowMainStockModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 cursor-pointer flex items-center justify-center space-x-1"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save & Record Main Stock</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
