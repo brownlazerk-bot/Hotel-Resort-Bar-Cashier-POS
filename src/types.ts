@@ -36,7 +36,8 @@ export interface MenuItem {
   foodCategory?: string;
   price: number; // Selling price (RWF)
   costPrice?: number; // Cost price (RWF)
-  stockQuantity: number;
+  stockQuantity: number; // Bar Stock (active selling) or Kitchen Stock
+  mainStockQuantity?: number; // Main Beverage Stock (warehouse / store)
   unit: string; // e.g. 'Bottle', 'Glass', 'Serving', 'Ticket', 'Cup', 'Shot', 'Portion', 'Pass', 'Hour', 'Service'
   status: ItemStatus;
   active?: boolean;
@@ -197,13 +198,42 @@ export interface StockAdjustmentLog {
   id: string;
   itemId: string;
   itemName: string;
-  type: 'Purchase' | 'Sale' | 'Adjustment' | 'Waste' | 'Damaged' | 'Return';
+  type: 'Purchase' | 'Sale' | 'Adjustment' | 'Waste' | 'Damaged' | 'Return' | 'Transfer';
   quantityChange: number; // positive for addition, negative for deduction
   previousStock: number;
   newStock: number;
+  sourceLocation?: 'Main Beverage Stock' | 'Bar Stock' | 'Kitchen Stock' | 'Supplier';
+  targetLocation?: 'Main Beverage Stock' | 'Bar Stock' | 'Kitchen Stock';
   reason?: string;
   timestamp: string;
   actor: string;
+}
+
+export interface PurchaseOrderItem {
+  itemId: string;
+  itemName: string;
+  category: Category;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  destination: 'Main Beverage Stock' | 'Bar Stock' | 'Kitchen Stock';
+}
+
+export interface PurchaseOrder {
+  id: string; // e.g. "PO-1001"
+  poNumber: string;
+  date: string; // YYYY-MM-DD
+  timestamp: string; // ISO
+  supplierName: string;
+  department: 'Bar / Beverage' | 'Kitchen';
+  items: PurchaseOrderItem[];
+  totalAmount: number;
+  status: 'Pending' | 'Received' | 'Cancelled';
+  paymentStatus: 'Paid' | 'Unpaid';
+  createdByName: string;
+  receivedAt?: string;
+  receivedByName?: string;
+  notes?: string;
 }
 
 export interface Shift {

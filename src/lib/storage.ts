@@ -1,7 +1,7 @@
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, AppUser, AuditLog,
-  Expense, CashMovement, DailyClosingRecord
+  Expense, CashMovement, DailyClosingRecord, PurchaseOrder
 } from '../types';
 import { 
   INITIAL_MENU_ITEMS, INITIAL_TABLES, INITIAL_WAITERS, 
@@ -25,6 +25,7 @@ const KEYS = {
   EXPENSES: 'hotel_expenses_prod',
   CASH_MOVEMENTS: 'hotel_cash_movements_prod',
   DAILY_CLOSINGS: 'hotel_daily_closings_prod',
+  PURCHASE_ORDERS: 'hotel_purchase_orders_prod',
 };
 
 export const SUPER_ADMIN_CREDENTIALS: AppUser = {
@@ -106,6 +107,7 @@ const LOCAL_TO_SERVER_KEY: Record<string, string> = {
   [KEYS.EXPENSES]: 'expenses',
   [KEYS.CASH_MOVEMENTS]: 'cashMovements',
   [KEYS.DAILY_CLOSINGS]: 'dailyClosings',
+  [KEYS.PURCHASE_ORDERS]: 'purchaseOrders',
 };
 
 function setStorage<T>(key: string, value: T): void {
@@ -395,6 +397,15 @@ export function addDailyClosing(record: Omit<DailyClosingRecord, 'id' | 'closedA
   };
   saveDailyClosings([newClosing, ...closings]);
   return newClosing;
+}
+
+// Purchase Orders Storage
+export function loadPurchaseOrders(): PurchaseOrder[] {
+  return getStorage<PurchaseOrder[]>(KEYS.PURCHASE_ORDERS, []);
+}
+
+export function savePurchaseOrders(pos: PurchaseOrder[]): void {
+  setStorage(KEYS.PURCHASE_ORDERS, pos);
 }
 
 export function resetAllDataToDefault(): void {

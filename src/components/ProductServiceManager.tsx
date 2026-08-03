@@ -45,6 +45,7 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
   const [formPrice, setFormPrice] = useState<string>('');
   const [formCostPrice, setFormCostPrice] = useState<string>('');
   const [formStock, setFormStock] = useState<string>('50');
+  const [formMainStock, setFormMainStock] = useState<string>('200');
   const [formUnit, setFormUnit] = useState<string>('Bottle');
   const [formPrepTime, setFormPrepTime] = useState<string>('15 mins');
   const [formActive, setFormActive] = useState<boolean>(true);
@@ -734,6 +735,7 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
       setFormPrice(item.price.toString());
       setFormCostPrice(item.costPrice ? item.costPrice.toString() : '');
       setFormStock(item.stockQuantity.toString());
+      setFormMainStock(item.mainStockQuantity ? item.mainStockQuantity.toString() : '200');
       setFormUnit(item.unit || 'Bottle');
       setFormPrepTime(item.prepTime || '15 mins');
       setFormActive(item.active !== false);
@@ -775,6 +777,7 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
 
     const costNum = parseFloat(formCostPrice);
     const stockNum = parseInt(formStock);
+    const mainStockNum = parseInt(formMainStock);
 
     let catToSave: Category = formCategory;
     if (formSection === 'Kitchen Menu') catToSave = 'Food';
@@ -795,6 +798,7 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
       price: priceNum,
       costPrice: !isNaN(costNum) && costNum >= 0 ? costNum : undefined,
       stockQuantity: !isNaN(stockNum) ? stockNum : 50,
+      mainStockQuantity: formSection === 'Bar Menu' && !isNaN(mainStockNum) ? mainStockNum : undefined,
       unit: formUnit || 'Unit',
       status: (!isNaN(stockNum) && stockNum <= 0) ? 'Out of Stock' : 'Available',
       active: formActive,
@@ -1461,7 +1465,7 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">
-                    Initial Stock Level
+                    {formSection === 'Bar Menu' ? 'Bar Stock (Active)' : formSection === 'Kitchen Menu' ? 'Kitchen Stock' : 'Initial Stock Level'}
                   </label>
                   <input
                     type="number"
@@ -1470,6 +1474,21 @@ export const ProductServiceManager: React.FC<ProductServiceManagerProps> = ({
                     className="w-full px-3 py-2 rounded-xl text-xs border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white"
                   />
                 </div>
+
+                {formSection === 'Bar Menu' && (
+                  <div>
+                    <label className="block text-xs font-bold text-indigo-500 dark:text-indigo-400 uppercase mb-1">
+                      Main Beverage Stock
+                    </label>
+                    <input
+                      type="number"
+                      value={formMainStock}
+                      onChange={(e) => setFormMainStock(e.target.value)}
+                      placeholder="Store / Warehouse"
+                      className="w-full px-3 py-2 rounded-xl text-xs border border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200 font-bold"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">

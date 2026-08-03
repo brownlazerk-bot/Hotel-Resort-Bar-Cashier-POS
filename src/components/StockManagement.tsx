@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   PackageCheck, AlertTriangle, Plus, Minus, Trash2, 
   Search, RefreshCw, FileText, ArrowUpRight, ArrowDownRight, History,
   Clock, ShoppingBag, Eye, ExternalLink, ShieldAlert, CheckCircle2, AlertCircle, Layers,
-  Calendar, Download, ArrowRight, Printer, CheckSquare, Square, Utensils, Wine, Filter, Check
+  Calendar, Download, ArrowRight, Printer, CheckSquare, Square, Utensils, Wine, Filter, Check,
+  ArrowRightLeft, Store, Boxes, Truck, ArrowDownToLine, Building2, Sparkles, Lightbulb, ShoppingCart
 } from 'lucide-react';
-import { MenuItem, StockAdjustmentLog, Order, Table, Waiter, AppUser } from '../types';
+import { MenuItem, StockAdjustmentLog, Order, Table, Waiter, AppUser, PurchaseOrder } from '../types';
 import { formatCurrency } from '../lib/currency';
 import { calculateStockMovementsForDate, ItemStockMovement } from '../lib/stockMovement';
 import { printReportHTML } from '../lib/exporter';
@@ -29,10 +30,14 @@ export const isBarItem = (item: MenuItem | ItemStockMovement | { category: strin
 interface StockManagementProps {
   menuItems: MenuItem[];
   stockLogs: StockAdjustmentLog[];
+  purchaseOrders?: PurchaseOrder[];
   orders?: Order[];
   tables?: Table[];
   waiters?: Waiter[];
   onUpdateStock: (itemId: string, qtyChange: number, type: StockAdjustmentLog['type'], reason: string) => void;
+  onTransferStock?: (itemId: string, quantity: number, reason: string) => void;
+  onCreatePurchaseOrder?: (po: Omit<PurchaseOrder, 'id' | 'poNumber' | 'timestamp'>) => void;
+  onReceivePurchaseOrder?: (poId: string) => void;
   onNavigateToOrders?: () => void;
   darkMode: boolean;
   language?: Language;
@@ -42,16 +47,71 @@ interface StockManagementProps {
 export const StockManagement: React.FC<StockManagementProps> = ({
   menuItems,
   stockLogs,
+  purchaseOrders = [],
   orders = [],
   tables = [],
   waiters = [],
   onUpdateStock,
+  onTransferStock,
+  onCreatePurchaseOrder,
+  onReceivePurchaseOrder,
   onNavigateToOrders,
   darkMode,
   language = 'rw',
   loggedInUser
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'available' | 'unpaid_reserved' | 'reconciliation' | 'logs'>('available');
+  const [activeSubTab, setActiveSubTab] = useState<
+    'main_beverage' | 'kitchen_stock' | 'purchasing' | 'transfers_log' | 'available' | 'unpaid_reserved' | 'reconciliation' | 'logs'
+  >('main_beverage');
+
+  // Stock Transfer Modal State
+  const [showTransferModal, setShowTransferModal] = useState<boolean>(false);
+  const [transferItemId, setTransferItemId] = useState<string>('');
+  const [transferQuantity, setTransferQuantity] = useState<number>(10);
+  const [transferReason, setTransferReason] = useState<string>('Exported to Bar Stock');
+
+  // Purchase Order Modal State
+  const [showPOModal, setShowPOModal] = useState<boolean>(false);
+  const [poDepartment, setPoDepartment] = useState<'Bar / Beverage' | 'Kitchen'>('Bar / Beverage');
+  const [poSupplier, setPoSupplier] = useState<string>('');
+  const [poItemId, setPoItemId] = useState<string>('');
+  const [poQuantity, setPoQuantity] = useState<number>(50);
+  const [poUnitCost, setPoUnitCost] = useState<number>(800);
+  const [poDestination, setPoDestination] = useState<'Main Beverage Stock' | 'Bar Stock' | 'Kitchen Stock'>('Main Beverage Stock');
+  const [poPaymentStatus, setPoPaymentStatus] = useState<'Paid' | 'Unpaid'>('Paid');
+  const [autoReceive, setAutoReceive] = useState<boolean>(true);
+
+  // Reorder Assistant / What Should We Order State
+  const [reorderFilter, setReorderFilter] = useState<'all' | 'out_of_stock' | 'bar' | 'kitchen'>('all');
+  const [reorderSearch, setReorderSearch] = useState<string>('');
+
+  // Compute unavailable (out of stock) and low stock items needing order
+  const unavailableItems = useMemo(() => {
+    return menuItems.map(item => {
+      const isBar = isBarItem(item);
+      const mainQty = item.mainStockQuantity || 0;
+      const barQty = item.stockQuantity || 0;
+      const totalQty = isBar ? (mainQty + barQty) : item.stockQuantity;
+      const minAlert = item.minStockAlert || 5;
+      const isOut = totalQty <= 0;
+      const isLow = totalQty > 0 && totalQty <= minAlert;
+
+      return {
+        item,
+        isBar,
+        mainQty,
+        barQty,
+        totalQty,
+        minAlert,
+        isOut,
+        isLow,
+        needsOrder: isOut || isLow,
+        suggestedQty: isBar ? (isOut ? 100 : 50) : (isOut ? 30 : 15),
+        unitCost: item.costPrice || Math.round(item.price * 0.6)
+      };
+    }).filter(x => x.needsOrder);
+  }, [menuItems]);
+
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [reconciliationDate, setReconciliationDate] = useState<string>(
@@ -351,6 +411,154 @@ export const StockManagement: React.FC<StockManagementProps> = ({
 
     setShowPrintModal(false);
   };
+
+  // Open Stock Transfer Modal
+  const openTransferModal = (item?: MenuItem) => {
+    const barItems = menuItems.filter(m => isBarItem(m));
+    const target = item || barItems[0];
+    if (target) {
+      setTransferItemId(target.id);
+    }
+    setTransferQuantity(10);
+    setTransferReason('Exported from Main Beverage Stock to Bar');
+    setShowTransferModal(true);
+  };
+
+  // Submit Stock Transfer (Main Beverage Stock -> Bar)
+  const handleTransferSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferItemId) {
+      alert('Please select an item to transfer.');
+      return;
+    }
+    if (transferQuantity <= 0) {
+      alert('Please enter a valid quantity greater than 0.');
+      return;
+    }
+
+    if (onTransferStock) {
+      onTransferStock(transferItemId, transferQuantity, transferReason);
+      setShowTransferModal(false);
+    } else {
+      alert('Stock transfer function is not available.');
+    }
+  };
+
+  // Open PO Modal with optional preselected item
+  const openPOModal = (
+    dept: 'Bar / Beverage' | 'Kitchen' = 'Bar / Beverage',
+    itemToPreselect?: MenuItem,
+    suggestedQty: number = 50,
+    defaultSupplier?: string
+  ) => {
+    setPoDepartment(dept);
+    const deptItems = menuItems.filter(m => dept === 'Kitchen' ? isKitchenItem(m) : isBarItem(m));
+    const target = itemToPreselect || (deptItems.length > 0 ? deptItems[0] : null);
+    if (target) {
+      setPoItemId(target.id);
+      setPoUnitCost(target.costPrice || Math.round(target.price * 0.6));
+    }
+    setPoSupplier(defaultSupplier || (dept === 'Bar / Beverage' ? 'Bralirwa / Wholesale Distributor' : 'Local Food Supplier'));
+    setPoQuantity(suggestedQty);
+    setPoDestination(dept === 'Kitchen' ? 'Kitchen Stock' : 'Main Beverage Stock');
+    setShowPOModal(true);
+  };
+
+  // Bulk Reorder All Out-Of-Stock Items
+  const handleBulkReorderUnavailable = () => {
+    const outOfStockOnly = unavailableItems.filter(x => x.isOut);
+    if (outOfStockOnly.length === 0) {
+      alert('There are no items currently completely out of stock!');
+      return;
+    }
+
+    if (onCreatePurchaseOrder) {
+      const itemsList = outOfStockOnly.map(x => ({
+        itemId: x.item.id,
+        itemName: x.item.name,
+        category: x.item.category,
+        quantity: x.suggestedQty,
+        unitCost: x.unitCost,
+        totalCost: x.suggestedQty * x.unitCost,
+        destination: (x.isBar ? 'Main Beverage Stock' : 'Kitchen Stock') as 'Main Beverage Stock' | 'Bar Stock' | 'Kitchen Stock'
+      }));
+
+      const totalCost = itemsList.reduce((acc, i) => acc + i.totalCost, 0);
+
+      const createdPO = onCreatePurchaseOrder({
+        poNumber: `PO-AUTO-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toISOString().split('T')[0],
+        supplierName: 'Automated Multi-Item Supplier Intake',
+        department: 'Bar / Beverage',
+        items: itemsList,
+        totalAmount: totalCost,
+        status: 'Received',
+        paymentStatus: 'Paid',
+        createdByName: loggedInUser?.fullName || 'Storekeeper',
+        receivedAt: new Date().toISOString(),
+        receivedByName: loggedInUser?.fullName || 'Storekeeper',
+        notes: `Bulk automated purchase for ${outOfStockOnly.length} out-of-stock items`
+      });
+
+      if (onReceivePurchaseOrder && createdPO) {
+        onReceivePurchaseOrder(createdPO.id);
+      }
+
+      alert(`Successfully created and accepted bulk purchase order for ${outOfStockOnly.length} out-of-stock items! Stock updated automatically.`);
+    }
+  };
+
+  // Submit Purchase Order
+  const handlePOSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!poSupplier.trim()) {
+      alert('Please enter supplier name.');
+      return;
+    }
+    if (!poItemId) {
+      alert('Please select an item.');
+      return;
+    }
+    if (poQuantity <= 0) {
+      alert('Please enter a valid quantity.');
+      return;
+    }
+
+    const item = menuItems.find(m => m.id === poItemId);
+    if (!item) return;
+
+    if (onCreatePurchaseOrder) {
+      const createdPO = onCreatePurchaseOrder({
+        poNumber: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
+        date: new Date().toISOString().split('T')[0],
+        supplierName: poSupplier.trim(),
+        department: poDepartment,
+        items: [{
+          itemId: item.id,
+          itemName: item.name,
+          category: item.category,
+          quantity: poQuantity,
+          unitCost: poUnitCost,
+          totalCost: poQuantity * poUnitCost,
+          destination: poDepartment === 'Kitchen' ? 'Kitchen Stock' : poDestination
+        }],
+        totalAmount: poQuantity * poUnitCost,
+        status: autoReceive ? 'Received' : 'Pending',
+        paymentStatus: poPaymentStatus,
+        createdByName: loggedInUser?.fullName || 'Storekeeper',
+        receivedAt: autoReceive ? new Date().toISOString() : undefined,
+        receivedByName: autoReceive ? (loggedInUser?.fullName || 'Storekeeper') : undefined,
+        notes: `Purchase for ${item.name} (${poQuantity} ${item.unit || 'pcs'})`
+      });
+
+      if (autoReceive && onReceivePurchaseOrder && createdPO) {
+        onReceivePurchaseOrder(createdPO.id);
+      }
+
+      setShowPOModal(false);
+      setPoSupplier('');
+    }
+  };
   
   // Stock Intake/Adjustment Modal
   const [selectedItemForModal, setSelectedItemForModal] = useState<MenuItem | null>(null);
@@ -542,6 +750,59 @@ export const StockManagement: React.FC<StockManagementProps> = ({
       {/* Sub-Navigation Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
         <button
+          onClick={() => setActiveSubTab('main_beverage')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeSubTab === 'main_beverage'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          <Building2 className="w-4 h-4 text-indigo-500" />
+          <span>Main Beverage Stock (Store)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('kitchen_stock')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeSubTab === 'kitchen_stock'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          <Utensils className="w-4 h-4 text-emerald-500" />
+          <span>Kitchen Stock</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('purchasing')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeSubTab === 'purchasing'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          <Truck className="w-4 h-4 text-sky-500" />
+          <span>Purchasing & Goods Intake</span>
+          {purchaseOrders.filter(p => p.status === 'Pending').length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-black animate-pulse">
+              {purchaseOrders.filter(p => p.status === 'Pending').length} Pending
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('transfers_log')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeSubTab === 'transfers_log'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          <ArrowRightLeft className="w-4 h-4 text-purple-500" />
+          <span>Stock Transfers Log</span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('available')}
           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
             activeSubTab === 'available'
@@ -550,7 +811,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
           }`}
         >
           <PackageCheck className="w-4 h-4" />
-          <span>Ibisigayemo muri Bar (Available Stock: {totalAvailableUnits})</span>
+          <span>Selling Bar Stock ({totalAvailableUnits})</span>
         </button>
 
         <button
@@ -562,7 +823,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
           }`}
         >
           <ShoppingBag className="w-4 h-4" />
-          <span>Ibiri ahandi bitarishyurwa (Unpaid Reserved: {totalReservedUnits})</span>
+          <span>Unpaid Reserved ({totalReservedUnits})</span>
           {reservedItemsList.length > 0 && (
             <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-600 text-white font-black">
               {reservedItemsList.length}
@@ -579,7 +840,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
           }`}
         >
           <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-          <span>Raporo y'Ububiko / Daily Stock Balance Sheet</span>
+          <span>Daily Balance Sheet</span>
         </button>
 
         <button
@@ -591,9 +852,569 @@ export const StockManagement: React.FC<StockManagementProps> = ({
           }`}
         >
           <History className="w-4 h-4" />
-          <span>Stock Audit Trail & Logs ({stockLogs.length})</span>
+          <span>Audit Logs ({stockLogs.length})</span>
         </button>
       </div>
+
+      {/* VIEW: MAIN BEVERAGE STOCK (STORE) */}
+      {activeSubTab === 'main_beverage' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-indigo-900/40 via-purple-900/20 to-slate-900 p-5 rounded-2xl border border-indigo-500/20">
+            <div>
+              <div className="flex items-center space-x-2">
+                <Building2 className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-black text-base text-white">Main Beverage Stock (Store / Warehouse)</h3>
+              </div>
+              <p className="text-xs text-indigo-200/80 mt-1">
+                Central warehouse stock for beverages (Beers, Wines, Liquors, Soft Drinks). Stock in Main Beverage Stock is transferred/exported to Bar Stock for sales.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => openPOModal('Bar / Beverage')}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center space-x-2 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+              >
+                <Truck className="w-4 h-4" />
+                <span>+ Intake New Purchasing</span>
+              </button>
+              <button
+                onClick={() => openTransferModal()}
+                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-2 shadow-lg shadow-amber-500/30 transition-all cursor-pointer"
+              >
+                <ArrowRightLeft className="w-4 h-4" />
+                <span>Export / Transfer to Bar</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Table of Beverage Items */}
+          <div className={`p-5 rounded-2xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search main beverage stock..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs border ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                />
+              </div>
+              <div className="text-xs font-bold text-indigo-400">
+                Total Beverage Products: {menuItems.filter(m => isBarItem(m)).length}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-800 text-gray-400 font-bold uppercase text-[10px]">
+                    <th className="py-3 px-3">Item Name</th>
+                    <th className="py-3 px-3">Category</th>
+                    <th className="py-3 px-3 text-center">Main Beverage Stock (Store)</th>
+                    <th className="py-3 px-3 text-center">Bar Stock (Selling)</th>
+                    <th className="py-3 px-3">Unit Price</th>
+                    <th className="py-3 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {menuItems.filter(m => isBarItem(m) && (m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.category.toLowerCase().includes(searchQuery.toLowerCase()))).map(item => {
+                    const mainStock = item.mainStockQuantity || 0;
+                    const barStock = item.stockQuantity || 0;
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="py-3 px-3 font-bold text-gray-900 dark:text-white">
+                          <div>
+                            {item.name}
+                            {item.unit && <span className="text-[10px] text-gray-400 ml-1">({item.unit})</span>}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-gray-500 font-medium">{item.category}</td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${
+                            mainStock > 10
+                              ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20'
+                              : mainStock > 0
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                          }`}>
+                            <Building2 className="w-3 h-3 mr-1" />
+                            {mainStock} {item.unit || 'pcs'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${
+                            barStock > 5
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                          }`}>
+                            <Store className="w-3 h-3 mr-1" />
+                            {barStock} {item.unit || 'pcs'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-black text-gray-900 dark:text-white">
+                          {formatCurrency(item.price)}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            onClick={() => openTransferModal(item)}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[11px] inline-flex items-center space-x-1 shadow-sm transition-all cursor-pointer"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                            <span>Export to Bar</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: KITCHEN STOCK */}
+      {activeSubTab === 'kitchen_stock' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-emerald-900/40 via-teal-900/20 to-slate-900 p-5 rounded-2xl border border-emerald-500/20">
+            <div>
+              <div className="flex items-center space-x-2">
+                <Utensils className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-black text-base text-white">Kitchen Stock & Food Inventory</h3>
+              </div>
+              <p className="text-xs text-emerald-200/80 mt-1">
+                Unified Kitchen Stock for raw materials, ingredients, and kitchen menu items. Direct gain upon purchasing.
+              </p>
+            </div>
+            <button
+              onClick={() => openPOModal('Kitchen')}
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+            >
+              <Truck className="w-4 h-4" />
+              <span>+ Purchase Kitchen Stock</span>
+            </button>
+          </div>
+
+          <div className={`p-5 rounded-2xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-800 text-gray-400 font-bold uppercase text-[10px]">
+                    <th className="py-3 px-3">Food / Item Name</th>
+                    <th className="py-3 px-3">Category</th>
+                    <th className="py-3 px-3 text-center">Kitchen Stock Quantity</th>
+                    <th className="py-3 px-3">Min Alert Level</th>
+                    <th className="py-3 px-3">Selling Price</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {menuItems.filter(m => isKitchenItem(m)).map(item => {
+                    const isLow = item.stockQuantity <= (item.minStockAlert || 5);
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="py-3 px-3 font-bold text-gray-900 dark:text-white">
+                          {item.name}
+                        </td>
+                        <td className="py-3 px-3 text-gray-500 font-medium">{item.category}</td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black ${
+                            isLow
+                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                          }`}>
+                            <Utensils className="w-3 h-3 mr-1" />
+                            {item.stockQuantity} {item.unit || 'portions'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-gray-400 font-bold">{item.minStockAlert || 5}</td>
+                        <td className="py-3 px-3 font-black text-gray-900 dark:text-white">
+                          {formatCurrency(item.price)}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            item.status === 'Available' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            onClick={() => {
+                              setSelectedItemForModal(item);
+                              setAdjustmentType('Purchase');
+                              setAdjustmentQuantity(10);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 transition-all cursor-pointer"
+                          >
+                            Restock
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: PURCHASING & GOODS INTAKE */}
+      {activeSubTab === 'purchasing' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-sky-900/40 via-blue-900/20 to-slate-900 p-5 rounded-2xl border border-sky-500/20 shadow-xl">
+            <div>
+              <div className="flex items-center space-x-2">
+                <Truck className="w-5 h-5 text-sky-400" />
+                <h3 className="font-black text-base text-white">Purchasing & Goods Intake</h3>
+              </div>
+              <p className="text-xs text-sky-200/80 mt-1">
+                Record purchases from suppliers. Accepting or receiving an order automatically gains stock into the target location.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {unavailableItems.filter(x => x.isOut).length > 0 && (
+                <button
+                  onClick={handleBulkReorderUnavailable}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-slate-950 font-black text-xs flex items-center space-x-2 shadow-lg shadow-amber-500/30 transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-slate-950" />
+                  <span>⚡ 1-Click Order All Out-of-Stock ({unavailableItems.filter(x => x.isOut).length})</span>
+                </button>
+              )}
+              <button
+                onClick={() => openPOModal('Bar / Beverage')}
+                className="px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs flex items-center space-x-2 shadow-lg shadow-sky-500/30 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ New Purchase Order</span>
+              </button>
+            </div>
+          </div>
+
+          {/* REORDER ASSISTANT / WHAT SHOULD WE ORDER? WIDGET */}
+          <div className="p-5 rounded-2xl border bg-gradient-to-br from-slate-900 via-indigo-950/40 to-slate-900 border-indigo-500/30 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-3 border-b border-indigo-500/20">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Lightbulb className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm text-white flex items-center gap-2">
+                    <span>What Should We Order? (Ibyo Mwatumiza Muri Purchasing)</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      Reorder Assistant
+                    </span>
+                  </h4>
+                  <p className="text-xs text-indigo-200/80 mt-0.5">
+                    Items currently out of stock or low in stock. Select an item to instantly launch a Purchase Order.
+                  </p>
+                </div>
+              </div>
+
+              {/* Summary Stats Badges */}
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center space-x-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Out of Stock: <strong>{unavailableItems.filter(x => x.isOut).length}</strong></span>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Low Stock: <strong>{unavailableItems.filter(x => x.isLow).length}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            {/* Search and Category Filters */}
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-indigo-400" />
+                <input
+                  type="text"
+                  placeholder="Ask or search what we can order... (e.g. Primus, Heineken, Meat, Soda)"
+                  value={reorderSearch}
+                  onChange={(e) => setReorderSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 rounded-xl text-xs font-bold bg-slate-800/80 border border-indigo-500/30 text-white placeholder-indigo-300/50 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-800/60 p-1 rounded-xl border border-slate-700/60 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setReorderFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    reorderFilter === 'all'
+                      ? 'bg-amber-500 text-slate-950 shadow-md'
+                      : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  All Needed ({unavailableItems.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReorderFilter('out_of_stock')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    reorderFilter === 'out_of_stock'
+                      ? 'bg-rose-500 text-white shadow-md'
+                      : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  🔴 Out of Stock ({unavailableItems.filter(x => x.isOut).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReorderFilter('bar')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    reorderFilter === 'bar'
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  🍺 Beverages ({unavailableItems.filter(x => x.isBar).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReorderFilter('kitchen')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                    reorderFilter === 'kitchen'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  🍳 Kitchen ({unavailableItems.filter(x => !x.isBar).length})
+                </button>
+              </div>
+            </div>
+
+            {/* List / Cards of Items needing order */}
+            {(() => {
+              const filteredList = unavailableItems.filter(x => {
+                const matchesSearch = x.item.name.toLowerCase().includes(reorderSearch.toLowerCase()) ||
+                  x.item.category.toLowerCase().includes(reorderSearch.toLowerCase());
+                if (!matchesSearch) return false;
+
+                if (reorderFilter === 'out_of_stock') return x.isOut;
+                if (reorderFilter === 'bar') return x.isBar;
+                if (reorderFilter === 'kitchen') return !x.isBar;
+                return true;
+              });
+
+              if (filteredList.length === 0) {
+                return (
+                  <div className="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 space-y-2">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                    <h5 className="font-black text-sm text-white">All Items In This View Are Fully Stocked!</h5>
+                    <p className="text-xs text-gray-400">No items match the selected filter or search criteria.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
+                  {filteredList.map(({ item, isBar, totalQty, isOut, suggestedQty, unitCost }) => (
+                    <div
+                      key={item.id}
+                      className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${
+                        isOut
+                          ? 'bg-rose-950/30 border-rose-500/40 hover:border-rose-400'
+                          : 'bg-slate-800/60 border-amber-500/30 hover:border-amber-400'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex justify-between items-start gap-2 mb-2">
+                          <div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{item.category}</span>
+                            <h5 className="font-black text-sm text-white">{item.name}</h5>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                            isOut ? 'bg-rose-500 text-white animate-pulse' : 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                          }`}>
+                            {isOut ? 'OUT OF STOCK (0)' : `LOW STOCK (${totalQty})`}
+                          </span>
+                        </div>
+
+                        <div className="text-xs space-y-1 mb-3 text-gray-300">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Department:</span>
+                            <span className="font-bold text-indigo-300">{isBar ? 'Main Beverage Store' : 'Kitchen'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Suggested Order:</span>
+                            <span className="font-black text-amber-400">{suggestedQty} {item.unit || 'pcs'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Estimated Cost:</span>
+                            <span className="font-black text-white">{formatCurrency(suggestedQty * unitCost)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => openPOModal(isBar ? 'Bar / Beverage' : 'Kitchen', item, suggestedQty)}
+                        className={`w-full py-2 rounded-lg font-black text-xs flex items-center justify-center space-x-1.5 shadow-md cursor-pointer transition-all ${
+                          isOut
+                            ? 'bg-rose-500 hover:bg-rose-400 text-white'
+                            : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                        }`}
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Order Now ({suggestedQty} {item.unit || 'pcs'})</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className={`p-5 rounded-2xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-800 text-gray-400 font-bold uppercase text-[10px]">
+                    <th className="py-3 px-3">PO Number & Date</th>
+                    <th className="py-3 px-3">Supplier</th>
+                    <th className="py-3 px-3">Department</th>
+                    <th className="py-3 px-3">Purchased Items</th>
+                    <th className="py-3 px-3">Destination</th>
+                    <th className="py-3 px-3">Total Amount</th>
+                    <th className="py-3 px-3">Fulfillment Status</th>
+                    <th className="py-3 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {purchaseOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-gray-400">
+                        No purchase orders recorded yet. Click "+ New Purchase Order" to create one.
+                      </td>
+                    </tr>
+                  ) : (
+                    purchaseOrders.map(po => (
+                      <tr key={po.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="py-3 px-3 font-bold text-gray-900 dark:text-white">
+                          <div>{po.poNumber}</div>
+                          <div className="text-[10px] text-gray-400">{po.date}</div>
+                        </td>
+                        <td className="py-3 px-3 font-bold text-sky-400">{po.supplierName}</td>
+                        <td className="py-3 px-3 font-medium text-gray-300">{po.department}</td>
+                        <td className="py-3 px-3">
+                          {po.items.map((it, idx) => (
+                            <div key={idx} className="font-bold text-gray-800 dark:text-gray-200">
+                              {it.itemName} ({it.quantity} @ {formatCurrency(it.unitCost)})
+                            </div>
+                          ))}
+                        </td>
+                        <td className="py-3 px-3 font-bold text-indigo-400">
+                          {po.items[0]?.destination || 'Store'}
+                        </td>
+                        <td className="py-3 px-3 font-black text-gray-900 dark:text-white">
+                          {formatCurrency(po.totalAmount)}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
+                            po.status === 'Received'
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse'
+                          }`}>
+                            {po.status === 'Received' ? '✓ Received (Stock Gained)' : '⏳ Pending Acceptance'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          {po.status === 'Pending' ? (
+                            <button
+                              onClick={() => onReceivePurchaseOrder && onReceivePurchaseOrder(po.id)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[11px] inline-flex items-center space-x-1 shadow-md transition-all cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Accept / Receive Order</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-gray-400">
+                              By {po.receivedByName || 'Admin'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW: STOCK TRANSFERS LOG */}
+      {activeSubTab === 'transfers_log' && (
+        <div className="space-y-6">
+          <div className="bg-slate-900 p-5 rounded-2xl border border-purple-500/20 flex justify-between items-center">
+            <div>
+              <h3 className="font-black text-base text-white flex items-center space-x-2">
+                <ArrowRightLeft className="w-5 h-5 text-purple-400" />
+                <span>Stock Transfer Audit Log</span>
+              </h3>
+              <p className="text-xs text-purple-200/80 mt-1">
+                History of stock movements from Main Beverage Stock to Bar Stock.
+              </p>
+            </div>
+            <div className="text-xs font-bold text-purple-400">
+              Total Transfers: {stockLogs.filter(l => l.type === 'Transfer').length}
+            </div>
+          </div>
+
+          <div className={`p-5 rounded-2xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-800 text-gray-400 font-bold uppercase text-[10px]">
+                    <th className="py-3 px-3">Date & Time</th>
+                    <th className="py-3 px-3">Item Transferred</th>
+                    <th className="py-3 px-3 text-center">Qty Transferred</th>
+                    <th className="py-3 px-3">From Location</th>
+                    <th className="py-3 px-3">To Location</th>
+                    <th className="py-3 px-3">Operator</th>
+                    <th className="py-3 px-3">Reason</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {stockLogs.filter(l => l.type === 'Transfer').length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-gray-400">
+                        No stock transfers logged yet. Export stock from Main Beverage Stock to Bar to populate this history.
+                      </td>
+                    </tr>
+                  ) : (
+                    stockLogs.filter(l => l.type === 'Transfer').map(log => (
+                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="py-3 px-3 font-medium text-gray-400">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3 font-bold text-gray-900 dark:text-white">{log.itemName}</td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="px-2.5 py-1 rounded-full text-xs font-black bg-purple-500/20 text-purple-300">
+                            +{log.quantityChange} units
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-bold text-indigo-400">{log.sourceLocation || 'Main Beverage Stock'}</td>
+                        <td className="py-3 px-3 font-bold text-amber-400">{log.targetLocation || 'Bar Stock'}</td>
+                        <td className="py-3 px-3 font-bold text-gray-300">{log.actor}</td>
+                        <td className="py-3 px-3 text-gray-400 italic">{log.reason}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* VIEW 1: AVAILABLE STOCK IN BAR */}
       {activeSubTab === 'available' && (
@@ -1623,6 +2444,290 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                 <span>Print Report Now</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXPORT / STOCK TRANSFER MODAL */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className={`max-w-md w-full rounded-2xl p-6 border shadow-2xl ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-gray-900'
+          }`}>
+            <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <ArrowRightLeft className="w-5 h-5 text-amber-500" />
+                <h3 className="font-black text-base">Export / Transfer Stock to Bar</h3>
+              </div>
+              <button
+                onClick={() => setShowTransferModal(false)}
+                className="text-gray-400 hover:text-white font-bold text-lg cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleTransferSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Select Beverage Product
+                </label>
+                <select
+                  value={transferItemId}
+                  onChange={(e) => setTransferItemId(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                >
+                  {menuItems.filter(m => isBarItem(m)).map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} — Main Stock: {item.mainStockQuantity || 0} | Bar Stock: {item.stockQuantity || 0}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {transferItemId && (
+                <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1">
+                  <div className="flex justify-between text-indigo-300 font-bold">
+                    <span>Main Beverage Stock (Available):</span>
+                    <span className="font-black text-white">
+                      {menuItems.find(m => m.id === transferItemId)?.mainStockQuantity || 0} units
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-amber-300 font-bold">
+                    <span>Bar Selling Stock (Current):</span>
+                    <span className="font-black text-white">
+                      {menuItems.find(m => m.id === transferItemId)?.stockQuantity || 0} units
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Quantity to Transfer / Export to Bar
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={menuItems.find(m => m.id === transferItemId)?.mainStockQuantity || 999}
+                  value={transferQuantity}
+                  onChange={(e) => setTransferQuantity(parseInt(e.target.value) || 0)}
+                  className={`w-full p-2.5 rounded-xl border text-sm font-bold ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Reason / Notes
+                </label>
+                <input
+                  type="text"
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                  placeholder="e.g. Daily Bar Restock for Shift"
+                  className={`w-full p-2.5 rounded-xl border text-xs ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                />
+              </div>
+
+              <div className="flex space-x-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 cursor-pointer"
+                >
+                  Confirm Export to Bar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* NEW PURCHASE ORDER / GOODS INTAKE MODAL */}
+      {showPOModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className={`max-w-lg w-full rounded-2xl p-6 border shadow-2xl ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-gray-900'
+          }`}>
+            <div className="flex justify-between items-center mb-4 border-b border-gray-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Truck className="w-5 h-5 text-sky-400" />
+                <h3 className="font-black text-base">Create Purchase Order / Intake Goods</h3>
+              </div>
+              <button
+                onClick={() => setShowPOModal(false)}
+                className="text-gray-400 hover:text-white font-bold text-lg cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handlePOSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Department
+                  </label>
+                  <select
+                    value={poDepartment}
+                    onChange={(e) => {
+                      const dept = e.target.value as 'Bar / Beverage' | 'Kitchen';
+                      setPoDepartment(dept);
+                      const items = menuItems.filter(m => dept === 'Kitchen' ? isKitchenItem(m) : isBarItem(m));
+                      if (items.length > 0) {
+                        setPoItemId(items[0].id);
+                      }
+                      setPoDestination(dept === 'Kitchen' ? 'Kitchen Stock' : 'Main Beverage Stock');
+                    }}
+                    className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  >
+                    <option value="Bar / Beverage">Bar / Beverage</option>
+                    <option value="Kitchen">Kitchen</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Supplier Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Bralirwa / City Wholesaler"
+                    value={poSupplier}
+                    onChange={(e) => setPoSupplier(e.target.value)}
+                    className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Select Item to Purchase
+                </label>
+                <select
+                  value={poItemId}
+                  onChange={(e) => {
+                    setPoItemId(e.target.value);
+                    const it = menuItems.find(m => m.id === e.target.value);
+                    if (it) {
+                      setPoUnitCost(it.costPrice || Math.round(it.price * 0.6));
+                    }
+                  }}
+                  className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                >
+                  {menuItems.filter(m => poDepartment === 'Kitchen' ? isKitchenItem(m) : isBarItem(m)).map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({item.category})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {poDepartment === 'Bar / Beverage' && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Stock Destination
+                  </label>
+                  <select
+                    value={poDestination}
+                    onChange={(e) => setPoDestination(e.target.value as any)}
+                    className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  >
+                    <option value="Main Beverage Stock">Main Beverage Stock (Store / Warehouse)</option>
+                    <option value="Bar Stock">Direct to Bar Stock (Selling Shelf)</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Quantity Purchased
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={poQuantity}
+                    onChange={(e) => setPoQuantity(parseInt(e.target.value) || 0)}
+                    className={`w-full p-2.5 rounded-xl border text-sm font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Unit Purchase Price (RWF)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={poUnitCost}
+                    onChange={(e) => setPoUnitCost(parseInt(e.target.value) || 0)}
+                    className={`w-full p-2.5 rounded-xl border text-sm font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs flex justify-between items-center text-sky-300 font-bold">
+                <span>Total Purchase Amount:</span>
+                <span className="text-base font-black text-white">{formatCurrency(poQuantity * poUnitCost)}</span>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center space-x-2 cursor-pointer text-xs font-bold text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={autoReceive}
+                    onChange={(e) => setAutoReceive(e.target.checked)}
+                    className="rounded text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <span>Accept / Receive Order Immediately (Auto Stock Gain)</span>
+                </label>
+              </div>
+
+              <div className="flex space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPOModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs shadow-lg shadow-sky-500/20 cursor-pointer"
+                >
+                  Save Purchase Order
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

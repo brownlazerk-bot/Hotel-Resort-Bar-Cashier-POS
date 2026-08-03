@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser,
-  Expense, CashMovement, DailyClosingRecord
+  Expense, CashMovement, DailyClosingRecord, PurchaseOrder
 } from './types';
 import { 
   loadMenuItems, saveMenuItems, loadTables, saveTables, 
@@ -18,7 +18,8 @@ import {
   loadCurrentUser, saveCurrentUser, clearCurrentUser, addAuditLog,
   loadExpenses, saveExpenses, addExpense,
   loadCashMovements, saveCashMovements, addCashMovement,
-  loadDailyClosings, saveDailyClosings, addDailyClosing
+  loadDailyClosings, saveDailyClosings, addDailyClosing,
+  loadPurchaseOrders, savePurchaseOrders
 } from './lib/storage';
 
 import { Header } from './components/Header';
@@ -67,6 +68,7 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [dailyClosings, setDailyClosings] = useState<DailyClosingRecord[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
 
   // Receipt Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
@@ -85,6 +87,7 @@ export default function App() {
     setExpenses(loadExpenses());
     setCashMovements(loadCashMovements());
     setDailyClosings(loadDailyClosings());
+    setPurchaseOrders(loadPurchaseOrders());
   };
 
   // Load Initial Data, Sync Engine, Online/Offline & Auto-Backup
@@ -810,6 +813,200 @@ export default function App() {
     }
   };
 
+  // Transfer Stock from Main Beverage Stock -> Bar
+  const handleTransferStock = (itemId: string, quantity: number, reason: string) => {
+    const targetIdx = menuItems.findIndex(m => m.id === itemId);
+    if (targetIdx === -1) return;
+
+    const item = menuItems[targetIdx];
+    const currentMain = item.mainStockQuantity || 0;
+    const currentBar = item.stockQuantity || 0;
+
+    if (quantity <= 0) {
+      alert('Please enter a valid transfer quantity greater than 0.');
+      return;
+    }
+
+    if (currentMain < quantity) {
+      alert(`Insufficient quantity in Main Beverage Stock. Available: ${currentMain} ${item.unit}s.`);
+      return;
+    }
+
+    const newMain = currentMain - quantity;
+    const newBar = currentBar + quantity;
+
+    const updatedItems = [...menuItems];
+    updatedItems[targetIdx] = {
+      ...item,
+      mainStockQuantity: newMain,
+      stockQuantity: newBar,
+      status: newBar > 0 ? 'Available' : 'Out of Stock'
+    };
+
+    const transferLog: StockAdjustmentLog = {
+      id: `log-tr-${Date.now()}`,
+      itemId: item.id,
+      itemName: item.name,
+      type: 'Transfer',
+      quantityChange: quantity,
+      previousStock: currentBar,
+      newStock: newBar,
+      sourceLocation: 'Main Beverage Stock',
+      targetLocation: 'Bar Stock',
+      reason: reason || 'Exported from Main Beverage Stock to Bar',
+      timestamp: new Date().toISOString(),
+      actor: currentShift?.cashierName || currentUser?.fullName || 'Storekeeper'
+    };
+
+    updateMenuItemsState(updatedItems);
+    updateStockLogsState([transferLog, ...stockLogs]);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Main Stock Transfer to Bar',
+        category: 'Inventory',
+        details: `Exported ${quantity} ${item.unit}s of ${item.name} from Main Beverage Stock to Bar`
+      });
+    }
+  };
+
+  // Create Purchase Order
+  const handleCreatePurchaseOrder = (newPOData: Omit<PurchaseOrder, 'id' | 'poNumber' | 'timestamp'>) => {
+    const newPO: PurchaseOrder = {
+      ...newPOData,
+      id: `PO-${Date.now()}`,
+      poNumber: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
+      timestamp: new Date().toISOString()
+    };
+
+    const updated = [newPO, ...purchaseOrders];
+    setPurchaseOrders(updated);
+    savePurchaseOrders(updated);
+    return newPO;
+  };
+
+  // Receive / Accept Purchase Order (Auto Stock Gain)
+  const handleReceivePurchaseOrder = (poId: string) => {
+    const targetPo = purchaseOrders.find(p => p.id === poId);
+    if (!targetPo) return;
+    if (targetPo.status === 'Received') {
+      alert('This Purchase Order has already been received!');
+      return;
+    }
+
+    let updatedMenuItems = [...menuItems];
+    let newLogs: StockAdjustmentLog[] = [...stockLogs];
+
+    targetPo.items.forEach(poItem => {
+      const idx = updatedMenuItems.findIndex(m => m.id === poItem.itemId);
+      if (idx > -1) {
+        const item = updatedMenuItems[idx];
+        const qty = poItem.quantity;
+
+        if (poItem.destination === 'Main Beverage Stock') {
+          const prevMain = item.mainStockQuantity || 0;
+          const newMain = prevMain + qty;
+          updatedMenuItems[idx] = {
+            ...item,
+            mainStockQuantity: newMain
+          };
+          newLogs.unshift({
+            id: `log-po-${Date.now()}-${poItem.itemId}`,
+            itemId: item.id,
+            itemName: item.name,
+            type: 'Purchase',
+            quantityChange: qty,
+            previousStock: prevMain,
+            newStock: newMain,
+            sourceLocation: 'Supplier',
+            targetLocation: 'Main Beverage Stock',
+            reason: `Purchased to Main Beverage Stock (PO #${targetPo.poNumber} - ${targetPo.supplierName})`,
+            timestamp: new Date().toISOString(),
+            actor: targetPo.receivedByName || currentUser?.fullName || 'Storekeeper'
+          });
+        } else if (poItem.destination === 'Bar Stock') {
+          const prevBar = item.stockQuantity || 0;
+          const newBar = prevBar + qty;
+          updatedMenuItems[idx] = {
+            ...item,
+            stockQuantity: newBar,
+            status: newBar > 0 ? 'Available' : 'Out of Stock'
+          };
+          newLogs.unshift({
+            id: `log-po-${Date.now()}-${poItem.itemId}`,
+            itemId: item.id,
+            itemName: item.name,
+            type: 'Purchase',
+            quantityChange: qty,
+            previousStock: prevBar,
+            newStock: newBar,
+            sourceLocation: 'Supplier',
+            targetLocation: 'Bar Stock',
+            reason: `Purchased direct to Bar Stock (PO #${targetPo.poNumber} - ${targetPo.supplierName})`,
+            timestamp: new Date().toISOString(),
+            actor: targetPo.receivedByName || currentUser?.fullName || 'Storekeeper'
+          });
+        } else {
+          // Kitchen Stock
+          const prevKitchen = item.stockQuantity || 0;
+          const newKitchen = prevKitchen + qty;
+          updatedMenuItems[idx] = {
+            ...item,
+            stockQuantity: newKitchen,
+            status: newKitchen > 0 ? 'Available' : 'Out of Stock'
+          };
+          newLogs.unshift({
+            id: `log-po-${Date.now()}-${poItem.itemId}`,
+            itemId: item.id,
+            itemName: item.name,
+            type: 'Purchase',
+            quantityChange: qty,
+            previousStock: prevKitchen,
+            newStock: newKitchen,
+            sourceLocation: 'Supplier',
+            targetLocation: 'Kitchen Stock',
+            reason: `Purchased to Kitchen Stock (PO #${targetPo.poNumber} - ${targetPo.supplierName})`,
+            timestamp: new Date().toISOString(),
+            actor: targetPo.receivedByName || currentUser?.fullName || 'Storekeeper'
+          });
+        }
+      }
+    });
+
+    const updatedPOs: PurchaseOrder[] = purchaseOrders.map(p => {
+      if (p.id === poId) {
+        return {
+          ...p,
+          status: 'Received' as const,
+          receivedAt: new Date().toISOString(),
+          receivedByName: currentUser?.fullName || 'Storekeeper'
+        };
+      }
+      return p;
+    });
+
+    setPurchaseOrders(updatedPOs);
+    savePurchaseOrders(updatedPOs);
+    updateMenuItemsState(updatedMenuItems);
+    updateStockLogsState(newLogs);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Received Purchase Order',
+        category: 'Inventory',
+        details: `Accepted/Received PO #${targetPo.poNumber} from ${targetPo.supplierName}. Stock updated automatically.`
+      });
+    }
+  };
+
   // Open New Shift
   const handleOpenShift = (cashierName: string, openingCash: number) => {
     const newShift: Shift = {
@@ -1157,10 +1354,14 @@ export default function App() {
           <StockManagement
             menuItems={menuItems}
             stockLogs={stockLogs}
+            purchaseOrders={purchaseOrders}
             orders={orders}
             tables={tables}
             waiters={waiters}
             onUpdateStock={handleUpdateStock}
+            onTransferStock={handleTransferStock}
+            onCreatePurchaseOrder={handleCreatePurchaseOrder}
+            onReceivePurchaseOrder={handleReceivePurchaseOrder}
             onNavigateToOrders={() => setActiveTab('order_center')}
             darkMode={darkMode}
             language={language}
