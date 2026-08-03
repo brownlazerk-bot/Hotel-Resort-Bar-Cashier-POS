@@ -196,7 +196,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose, dark
                 HOTEL • RESTAURANT • BAR • LOUNGE
               </p>
               <p className="text-[10px] text-black">KAMONYI-RUNDA</p>
-              <p className="text-[10px] text-black">Tel: +250 788 000 111 / +237 670 000 111</p>
+              <p className="text-[10px] font-black text-black">Pay or Call Waiter: 0799712642</p>
               <p className="text-[10px] font-black text-black">TIN: 109823741</p>
             </div>
 
