@@ -927,6 +927,123 @@ export default function App() {
     }
   };
 
+  // Directly Record & Edit Kitchen Stock Quantity & Properties
+  const handleUpdateKitchenStock = (
+    itemId: string,
+    newKitchenQty: number,
+    reason: string,
+    additionalEdits?: { price?: number; costPrice?: number; unit?: string; minStockAlert?: number }
+  ) => {
+    const targetIdx = menuItems.findIndex(m => m.id === itemId);
+    if (targetIdx === -1) return;
+
+    const prevKitchen = menuItems[targetIdx].stockQuantity || 0;
+    const diff = newKitchenQty - prevKitchen;
+
+    const updatedItems = [...menuItems];
+    updatedItems[targetIdx] = {
+      ...updatedItems[targetIdx],
+      stockQuantity: Math.max(0, newKitchenQty),
+      status: newKitchenQty > 0 ? 'Available' : 'Out of Stock',
+      ...(additionalEdits?.price !== undefined ? { price: additionalEdits.price } : {}),
+      ...(additionalEdits?.costPrice !== undefined ? { costPrice: additionalEdits.costPrice } : {}),
+      ...(additionalEdits?.unit !== undefined ? { unit: additionalEdits.unit } : {}),
+      ...(additionalEdits?.minStockAlert !== undefined ? { minStockAlert: additionalEdits.minStockAlert } : {})
+    };
+
+    const newLog: StockAdjustmentLog = {
+      id: `log-kitchen-${Date.now()}`,
+      itemId,
+      itemName: menuItems[targetIdx].name,
+      type: diff >= 0 ? 'Purchase' : 'Adjustment',
+      quantityChange: diff,
+      previousStock: prevKitchen,
+      newStock: Math.max(0, newKitchenQty),
+      sourceLocation: 'Kitchen Stock',
+      reason: reason || 'Kitchen Stock Direct Record/Edit',
+      timestamp: new Date().toISOString(),
+      actor: currentShift?.cashierName || currentUser?.fullName || 'Storekeeper'
+    };
+
+    updateMenuItemsState(updatedItems);
+    updateStockLogsState([newLog, ...stockLogs]);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Record/Edit Kitchen Stock',
+        category: 'Inventory',
+        details: `Updated Kitchen Stock for ${menuItems[targetIdx].name}: Old Stock=${prevKitchen}, New Stock=${newKitchenQty} (${diff >= 0 ? '+' : ''}${diff}) - Reason: ${reason}`
+      });
+    }
+  };
+
+  // Edit / Update Existing Purchase Order
+  const handleEditPurchaseOrder = (poId: string, updatedPOData: Partial<PurchaseOrder>) => {
+    const existingPo = purchaseOrders.find(p => p.id === poId);
+    if (!existingPo) return;
+
+    const wasReceived = existingPo.status === 'Received';
+    const isNowReceived = updatedPOData.status === 'Received';
+
+    const updatedPOs = purchaseOrders.map(p => {
+      if (p.id === poId) {
+        return {
+          ...p,
+          ...updatedPOData,
+          ...(isNowReceived && !wasReceived ? {
+            receivedAt: new Date().toISOString(),
+            receivedByName: currentUser?.fullName || 'Storekeeper'
+          } : {})
+        };
+      }
+      return p;
+    });
+
+    setPurchaseOrders(updatedPOs);
+    savePurchaseOrders(updatedPOs);
+
+    // If PO was newly marked as Received in edit, trigger stock intake
+    if (!wasReceived && isNowReceived) {
+      handleReceivePurchaseOrder(poId);
+    } else if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Updated Purchase Order',
+        category: 'Inventory',
+        details: `Edited Purchase Order #${existingPo.poNumber} (${existingPo.supplierName})`
+      });
+    }
+  };
+
+  // Delete / Cancel Purchase Order
+  const handleDeletePurchaseOrder = (poId: string) => {
+    const target = purchaseOrders.find(p => p.id === poId);
+    if (!target) return;
+
+    const filtered = purchaseOrders.filter(p => p.id !== poId);
+    setPurchaseOrders(filtered);
+    savePurchaseOrders(filtered);
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Deleted Purchase Order',
+        category: 'Inventory',
+        details: `Deleted Purchase Order #${target.poNumber}`
+      });
+    }
+  };
+
   // Create Purchase Order
   const handleCreatePurchaseOrder = (newPOData: Omit<PurchaseOrder, 'id' | 'poNumber' | 'timestamp'>) => {
     const newPO: PurchaseOrder = {
@@ -1413,9 +1530,12 @@ export default function App() {
             waiters={waiters}
             onUpdateStock={handleUpdateStock}
             onUpdateMainStock={handleUpdateMainStock}
+            onUpdateKitchenStock={handleUpdateKitchenStock}
             onTransferStock={handleTransferStock}
             onCreatePurchaseOrder={handleCreatePurchaseOrder}
             onReceivePurchaseOrder={handleReceivePurchaseOrder}
+            onEditPurchaseOrder={handleEditPurchaseOrder}
+            onDeletePurchaseOrder={handleDeletePurchaseOrder}
             onNavigateToOrders={() => setActiveTab('order_center')}
             darkMode={darkMode}
             language={language}

@@ -41,9 +41,17 @@ interface StockManagementProps {
     reason: string,
     additionalEdits?: { price?: number; costPrice?: number; unit?: string; minStockAlert?: number }
   ) => void;
+  onUpdateKitchenStock?: (
+    itemId: string,
+    newKitchenQty: number,
+    reason: string,
+    additionalEdits?: { price?: number; costPrice?: number; unit?: string; minStockAlert?: number }
+  ) => void;
   onTransferStock?: (itemId: string, quantity: number, reason: string) => void;
   onCreatePurchaseOrder?: (po: Omit<PurchaseOrder, 'id' | 'poNumber' | 'timestamp'>) => void;
   onReceivePurchaseOrder?: (poId: string) => void;
+  onEditPurchaseOrder?: (poId: string, updatedPO: Partial<PurchaseOrder>) => void;
+  onDeletePurchaseOrder?: (poId: string) => void;
   onNavigateToOrders?: () => void;
   darkMode: boolean;
   language?: Language;
@@ -59,9 +67,12 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   waiters = [],
   onUpdateStock,
   onUpdateMainStock,
+  onUpdateKitchenStock,
   onTransferStock,
   onCreatePurchaseOrder,
   onReceivePurchaseOrder,
+  onEditPurchaseOrder,
+  onDeletePurchaseOrder,
   onNavigateToOrders,
   darkMode,
   language = 'rw',
@@ -98,6 +109,27 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   const [poDestination, setPoDestination] = useState<'Main Beverage Stock' | 'Bar Stock' | 'Kitchen Stock'>('Main Beverage Stock');
   const [poPaymentStatus, setPoPaymentStatus] = useState<'Paid' | 'Unpaid'>('Paid');
   const [autoReceive, setAutoReceive] = useState<boolean>(true);
+
+  // Edit Purchase Order Console Modal State
+  const [showEditPOModal, setShowEditPOModal] = useState<boolean>(false);
+  const [editingPoId, setEditingPoId] = useState<string>('');
+  const [editPoSupplier, setEditPoSupplier] = useState<string>('');
+  const [editPoDepartment, setEditPoDepartment] = useState<'Bar / Beverage' | 'Kitchen'>('Bar / Beverage');
+  const [editPoPaymentStatus, setEditPoPaymentStatus] = useState<'Paid' | 'Unpaid'>('Paid');
+  const [editPoStatus, setEditPoStatus] = useState<'Pending' | 'Received'>('Pending');
+  const [editPoNotes, setEditPoNotes] = useState<string>('');
+  const [editPoItems, setEditPoItems] = useState<{ itemId: string; itemName: string; category: string; quantity: number; unitCost: number; totalCost: number; destination: 'Main Beverage Stock' | 'Bar Stock' | 'Kitchen Stock' }[]>([]);
+
+  // Kitchen Stock Console / Recording & Edit State
+  const [showKitchenStockModal, setShowKitchenStockModal] = useState<boolean>(false);
+  const [kitchenStockItemId, setKitchenStockItemId] = useState<string>('');
+  const [kitchenStockMode, setKitchenStockMode] = useState<'set' | 'add' | 'subtract'>('set');
+  const [kitchenStockQuantityValue, setKitchenStockQuantityValue] = useState<number>(0);
+  const [kitchenStockReason, setKitchenStockReason] = useState<string>('Kitchen Store Audit');
+  const [kitchenStockPrice, setKitchenStockPrice] = useState<number>(0);
+  const [kitchenStockCostPrice, setKitchenStockCostPrice] = useState<number>(0);
+  const [kitchenStockUnit, setKitchenStockUnit] = useState<string>('portions');
+  const [kitchenStockMinAlert, setKitchenStockMinAlert] = useState<number>(5);
 
   // Reorder Assistant / What Should We Order State
   const [reorderFilter, setReorderFilter] = useState<'all' | 'out_of_stock' | 'bar' | 'kitchen'>('all');
@@ -492,6 +524,394 @@ export const StockManagement: React.FC<StockManagementProps> = ({
 
     setShowMainStockModal(false);
     alert(`Main Beverage Stock for "${targetItem.name}" updated successfully to ${finalQty} ${mainStockUnit}s!`);
+  };
+
+  // Open Record & Edit Kitchen Stock Console Modal
+  const openKitchenStockModal = (item?: MenuItem) => {
+    const kitchenItems = menuItems.filter(m => isKitchenItem(m));
+    const target = item || (kitchenItems.length > 0 ? kitchenItems[0] : null);
+    if (target) {
+      setKitchenStockItemId(target.id);
+      setKitchenStockQuantityValue(target.stockQuantity || 0);
+      setKitchenStockPrice(target.price || 0);
+      setKitchenStockCostPrice(target.costPrice || Math.round(target.price * 0.6));
+      setKitchenStockUnit(target.unit || 'portions');
+      setKitchenStockMinAlert(target.minStockAlert || 5);
+    }
+    setKitchenStockMode('set');
+    setKitchenStockReason('Kitchen Store Physical Audit / Direct Recording');
+    setShowKitchenStockModal(true);
+  };
+
+  const handleKitchenStockItemChange = (itemId: string) => {
+    setKitchenStockItemId(itemId);
+    const target = menuItems.find(m => m.id === itemId);
+    if (target) {
+      setKitchenStockQuantityValue(target.stockQuantity || 0);
+      setKitchenStockPrice(target.price || 0);
+      setKitchenStockCostPrice(target.costPrice || Math.round(target.price * 0.6));
+      setKitchenStockUnit(target.unit || 'portions');
+      setKitchenStockMinAlert(target.minStockAlert || 5);
+    }
+  };
+
+  const handleKitchenStockSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kitchenStockItemId) {
+      alert('Please select a kitchen item.');
+      return;
+    }
+
+    const targetItem = menuItems.find(m => m.id === kitchenStockItemId);
+    if (!targetItem) return;
+
+    const currentQty = targetItem.stockQuantity || 0;
+    let finalQty = kitchenStockQuantityValue;
+
+    if (kitchenStockMode === 'add') {
+      finalQty = currentQty + kitchenStockQuantityValue;
+    } else if (kitchenStockMode === 'subtract') {
+      finalQty = Math.max(0, currentQty - kitchenStockQuantityValue);
+    }
+
+    if (onUpdateKitchenStock) {
+      onUpdateKitchenStock(kitchenStockItemId, finalQty, kitchenStockReason, {
+        price: kitchenStockPrice,
+        costPrice: kitchenStockCostPrice,
+        unit: kitchenStockUnit,
+        minStockAlert: kitchenStockMinAlert
+      });
+    } else {
+      const diff = finalQty - currentQty;
+      onUpdateStock(kitchenStockItemId, diff, 'Adjustment', `[Kitchen Stock Console] ${kitchenStockReason}`);
+    }
+
+    setShowKitchenStockModal(false);
+    alert(`Kitchen Stock for "${targetItem.name}" updated successfully to ${finalQty} ${kitchenStockUnit}!`);
+  };
+
+  // Open Edit Purchase Order Console Modal
+  const openEditPOModal = (po: PurchaseOrder) => {
+    setEditingPoId(po.id);
+    setEditPoSupplier(po.supplierName);
+    setEditPoDepartment(po.department);
+    setEditPoPaymentStatus(po.paymentStatus || 'Paid');
+    setEditPoStatus(po.status);
+    setEditPoNotes(po.notes || '');
+    setEditPoItems([...po.items]);
+    setShowEditPOModal(true);
+  };
+
+  const handleEditPOSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPoId) return;
+
+    const totalAmt = editPoItems.reduce((acc, it) => acc + (it.quantity * it.unitCost), 0);
+
+    if (onEditPurchaseOrder) {
+      onEditPurchaseOrder(editingPoId, {
+        supplierName: editPoSupplier,
+        department: editPoDepartment,
+        paymentStatus: editPoPaymentStatus,
+        status: editPoStatus,
+        notes: editPoNotes,
+        items: editPoItems,
+        totalAmount: totalAmt
+      });
+    }
+
+    setShowEditPOModal(false);
+    alert('Purchase Order updated successfully!');
+  };
+
+  // Print Main Beverage Stock Report
+  const handlePrintMainStockReport = () => {
+    const mainItems = menuItems.filter(m => isBarItem(m));
+    const totalLines = mainItems.length;
+    const totalQty = mainItems.reduce((acc, m) => acc + (m.mainStockQuantity || 0), 0);
+    const totalCostValue = mainItems.reduce((acc, m) => acc + ((m.mainStockQuantity || 0) * (m.costPrice || Math.round(m.price * 0.6))), 0);
+    const totalRetailValue = mainItems.reduce((acc, m) => acc + ((m.mainStockQuantity || 0) * m.price), 0);
+
+    const staffName = loggedInUser?.fullName || 'Store Keeper / Manager';
+
+    const html = `
+      <style>
+        @page { size: A4 portrait; margin: 10mm; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; margin: 0; padding: 10px; }
+        .header { text-align: center; border-bottom: 3px double #111827; padding-bottom: 8px; margin-bottom: 12px; }
+        .kpi-grid { display: flex; justify-content: space-around; background: #f3f4f6; border: 1px solid #d1d5db; padding: 8px; margin-bottom: 12px; border-radius: 4px; }
+        .kpi-box { text-align: center; }
+        .kpi-val { font-size: 14px; font-weight: bold; color: #000; }
+        .kpi-lbl { font-size: 9px; color: #4b5563; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
+        th { background: #1e293b; color: #ffffff; border: 1px solid #0f172a; padding: 6px 8px; font-weight: bold; text-align: left; }
+        td { border: 1px solid #cbd5e1; padding: 5px 8px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .total-row { background: #f1f5f9; font-weight: bold; border-top: 2px solid #0f172a; }
+      </style>
+
+      <div class="header">
+        <h1 style="font-size: 20px; font-weight: 900; margin: 0;">SEVEN TO SEVEN - SKY VIEW RESORT</h1>
+        <h3 style="font-size: 13px; margin: 2px 0 6px 0; color: #374151;">MAIN BEVERAGE STORE INVENTORY REPORT</h3>
+        <div style="font-size: 10px; color: #6b7280;">
+          Generated: ${new Date().toLocaleString()} | Printed By: <strong>${staffName}</strong>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-box"><div class="kpi-val">${totalLines}</div><div class="kpi-lbl">Product Lines</div></div>
+        <div class="kpi-box"><div class="kpi-val">${totalQty}</div><div class="kpi-lbl">Total Units in Main Store</div></div>
+        <div class="kpi-box"><div class="kpi-val">RWF ${totalCostValue.toLocaleString()}</div><div class="kpi-lbl">Total Store Cost Value</div></div>
+        <div class="kpi-box"><div class="kpi-val">RWF ${totalRetailValue.toLocaleString()}</div><div class="kpi-lbl">Potential Retail Sales</div></div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Product Name</th>
+            <th>Category</th>
+            <th class="text-center">Main Store Qty</th>
+            <th class="text-center">Unit</th>
+            <th class="text-right">Unit Cost</th>
+            <th class="text-right">Selling Price</th>
+            <th class="text-right">Total Cost Value</th>
+            <th class="text-right">Potential Retail Value</th>
+            <th class="text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${mainItems.map(m => {
+            const qty = m.mainStockQuantity || 0;
+            const cost = m.costPrice || Math.round(m.price * 0.6);
+            const totCost = qty * cost;
+            const totRetail = qty * m.price;
+            const isOut = qty <= 0;
+            const isLow = qty > 0 && qty <= (m.minStockAlert || 10);
+            return `
+              <tr>
+                <td style="font-weight: bold;">${m.name}</td>
+                <td>${m.category}</td>
+                <td class="text-center" style="font-weight: bold; ${isOut ? 'color: red;' : ''}">${qty}</td>
+                <td class="text-center">${m.unit || 'pcs'}</td>
+                <td class="text-right">RWF ${cost.toLocaleString()}</td>
+                <td class="text-right">RWF ${m.price.toLocaleString()}</td>
+                <td class="text-right" style="font-weight: bold;">RWF ${totCost.toLocaleString()}</td>
+                <td class="text-right" style="font-weight: bold;">RWF ${totRetail.toLocaleString()}</td>
+                <td class="text-center" style="font-weight: bold; color: ${isOut ? 'red' : isLow ? 'orange' : 'green'};">
+                  ${isOut ? 'OUT OF STOCK' : isLow ? 'LOW STOCK' : 'OK'}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+          <tr class="total-row">
+            <td colspan="2">TOTAL STORE SUMMARY</td>
+            <td class="text-center">${totalQty}</td>
+            <td colspan="3"></td>
+            <td class="text-right">RWF ${totalCostValue.toLocaleString()}</td>
+            <td class="text-right">RWF ${totalRetailValue.toLocaleString()}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="border-top: 1px dashed #94a3b8; margin-top: 25px; padding-top: 10px; display: flex; justify-content: space-between; font-size: 10px;">
+        <div>Store Keeper Sign: ___________________________</div>
+        <div>Manager Verification: ___________________________</div>
+      </div>
+    `;
+
+    printReportHTML(`Main Store Report - ${new Date().toISOString().split('T')[0]}`, html);
+  };
+
+  // Print Kitchen Stock Inventory Report
+  const handlePrintKitchenStockReport = () => {
+    const kitchenItems = menuItems.filter(m => isKitchenItem(m));
+    const totalLines = kitchenItems.length;
+    const totalQty = kitchenItems.reduce((acc, m) => acc + (m.stockQuantity || 0), 0);
+    const totalValuation = kitchenItems.reduce((acc, m) => acc + ((m.stockQuantity || 0) * (m.costPrice || Math.round(m.price * 0.6))), 0);
+
+    const staffName = loggedInUser?.fullName || 'Kitchen Chef / Store Keeper';
+
+    const html = `
+      <style>
+        @page { size: A4 portrait; margin: 10mm; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; margin: 0; padding: 10px; }
+        .header { text-align: center; border-bottom: 3px double #111827; padding-bottom: 8px; margin-bottom: 12px; }
+        .kpi-grid { display: flex; justify-content: space-around; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 8px; margin-bottom: 12px; border-radius: 4px; }
+        .kpi-box { text-align: center; }
+        .kpi-val { font-size: 14px; font-weight: bold; color: #065f46; }
+        .kpi-lbl { font-size: 9px; color: #047857; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
+        th { background: #064e3b; color: #ffffff; border: 1px solid #022c22; padding: 6px 8px; font-weight: bold; text-align: left; }
+        td { border: 1px solid #cbd5e1; padding: 5px 8px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .total-row { background: #f0fdf4; font-weight: bold; border-top: 2px solid #064e3b; }
+      </style>
+
+      <div class="header">
+        <h1 style="font-size: 20px; font-weight: 900; margin: 0;">SEVEN TO SEVEN - SKY VIEW RESORT</h1>
+        <h3 style="font-size: 13px; margin: 2px 0 6px 0; color: #047857;">KITCHEN STORE & INGREDIENT INVENTORY REPORT</h3>
+        <div style="font-size: 10px; color: #6b7280;">
+          Generated: ${new Date().toLocaleString()} | Printed By: <strong>${staffName}</strong>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-box"><div class="kpi-val">${totalLines}</div><div class="kpi-lbl">Kitchen Items</div></div>
+        <div class="kpi-box"><div class="kpi-val">${totalQty}</div><div class="kpi-lbl">Total Kitchen Units</div></div>
+        <div class="kpi-box"><div class="kpi-val">RWF ${totalValuation.toLocaleString()}</div><div class="kpi-lbl">Total Kitchen Valuation</div></div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Item / Ingredient Name</th>
+            <th>Category</th>
+            <th class="text-center">Kitchen Stock Qty</th>
+            <th class="text-center">Unit</th>
+            <th class="text-right">Unit Cost</th>
+            <th class="text-right">Total Cost Value</th>
+            <th class="text-center">Min Alert</th>
+            <th class="text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${kitchenItems.map(m => {
+            const qty = m.stockQuantity || 0;
+            const cost = m.costPrice || Math.round(m.price * 0.6);
+            const totCost = qty * cost;
+            const minAlert = m.minStockAlert || 5;
+            const isOut = qty <= 0;
+            const isLow = qty > 0 && qty <= minAlert;
+            return `
+              <tr>
+                <td style="font-weight: bold;">${m.name}</td>
+                <td>${m.category}</td>
+                <td class="text-center" style="font-weight: bold; ${isOut ? 'color: red;' : ''}">${qty}</td>
+                <td class="text-center">${m.unit || 'portions'}</td>
+                <td class="text-right">RWF ${cost.toLocaleString()}</td>
+                <td class="text-right" style="font-weight: bold;">RWF ${totCost.toLocaleString()}</td>
+                <td class="text-center">${minAlert}</td>
+                <td class="text-center" style="font-weight: bold; color: ${isOut ? 'red' : isLow ? 'orange' : 'green'};">
+                  ${isOut ? 'OUT OF STOCK' : isLow ? 'LOW STOCK' : 'AVAILABLE'}
+                </td>
+              </tr>
+            `;
+          }).join('')}
+          <tr class="total-row">
+            <td colspan="2">TOTAL KITCHEN SUMMARY</td>
+            <td class="text-center">${totalQty}</td>
+            <td colspan="2"></td>
+            <td class="text-right">RWF ${totalValuation.toLocaleString()}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="border-top: 1px dashed #94a3b8; margin-top: 25px; padding-top: 10px; display: flex; justify-content: space-between; font-size: 10px;">
+        <div>Head Chef Sign: ___________________________</div>
+        <div>Store Keeper Sign: ___________________________</div>
+      </div>
+    `;
+
+    printReportHTML(`Kitchen Stock Report - ${new Date().toISOString().split('T')[0]}`, html);
+  };
+
+  // Print Purchases & Goods Intake Report
+  const handlePrintPurchasesReport = () => {
+    const totalPOs = purchaseOrders.length;
+    const receivedPOs = purchaseOrders.filter(p => p.status === 'Received');
+    const pendingPOs = purchaseOrders.filter(p => p.status === 'Pending');
+    const totalSpend = purchaseOrders.reduce((acc, p) => acc + p.totalAmount, 0);
+    const paidSpend = purchaseOrders.filter(p => p.paymentStatus === 'Paid').reduce((acc, p) => acc + p.totalAmount, 0);
+    const unpaidSpend = purchaseOrders.filter(p => p.paymentStatus === 'Unpaid').reduce((acc, p) => acc + p.totalAmount, 0);
+
+    const staffName = loggedInUser?.fullName || 'Purchasing Manager / Store Keeper';
+
+    const html = `
+      <style>
+        @page { size: A4 portrait; margin: 10mm; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; margin: 0; padding: 10px; }
+        .header { text-align: center; border-bottom: 3px double #111827; padding-bottom: 8px; margin-bottom: 12px; }
+        .kpi-grid { display: flex; justify-content: space-around; background: #f0f9ff; border: 1px solid #bae6fd; padding: 8px; margin-bottom: 12px; border-radius: 4px; }
+        .kpi-box { text-align: center; }
+        .kpi-val { font-size: 14px; font-weight: bold; color: #0369a1; }
+        .kpi-lbl { font-size: 9px; color: #0284c7; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
+        th { background: #075985; color: #ffffff; border: 1px solid #0c4a6e; padding: 6px 8px; font-weight: bold; text-align: left; }
+        td { border: 1px solid #cbd5e1; padding: 5px 8px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .total-row { background: #f0f9ff; font-weight: bold; border-top: 2px solid #075985; }
+      </style>
+
+      <div class="header">
+        <h1 style="font-size: 20px; font-weight: 900; margin: 0;">SEVEN TO SEVEN - SKY VIEW RESORT</h1>
+        <h3 style="font-size: 13px; margin: 2px 0 6px 0; color: #0284c7;">PURCHASING & GOODS INTAKE SUMMARY REPORT</h3>
+        <div style="font-size: 10px; color: #6b7280;">
+          Generated: ${new Date().toLocaleString()} | Printed By: <strong>${staffName}</strong>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-box"><div class="kpi-val">${totalPOs}</div><div class="kpi-lbl">Total Purchase Orders</div></div>
+        <div class="kpi-box"><div class="kpi-val">${receivedPOs.length} / ${pendingPOs.length}</div><div class="kpi-lbl">Received / Pending</div></div>
+        <div class="kpi-box"><div class="kpi-val">RWF ${totalSpend.toLocaleString()}</div><div class="kpi-lbl">Total Purchase Spend</div></div>
+        <div class="kpi-box"><div class="kpi-val">RWF ${paidSpend.toLocaleString()}</div><div class="kpi-lbl">Paid Spend</div></div>
+        <div class="kpi-box"><div class="kpi-val" style="color: #dc2626;">RWF ${unpaidSpend.toLocaleString()}</div><div class="kpi-lbl">Credit / Unpaid</div></div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>PO Number & Date</th>
+            <th>Supplier Name</th>
+            <th>Department</th>
+            <th>Purchased Items</th>
+            <th class="text-center">Destination</th>
+            <th class="text-right">Total Amount</th>
+            <th class="text-center">Fulfillment Status</th>
+            <th class="text-center">Payment Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${purchaseOrders.length === 0 ? `
+            <tr><td colspan="8" class="text-center">No Purchase Orders Recorded</td></tr>
+          ` : purchaseOrders.map(po => `
+            <tr>
+              <td style="font-weight: bold;">${po.poNumber}<br/><span style="font-size: 9px; color: #64748b;">${po.date}</span></td>
+              <td style="font-weight: bold; color: #0284c7;">${po.supplierName}</td>
+              <td>${po.department}</td>
+              <td>
+                ${po.items.map(it => `<div>• ${it.itemName} (${it.quantity} @ RWF ${it.unitCost.toLocaleString()})</div>`).join('')}
+              </td>
+              <td class="text-center" style="font-weight: bold;">${po.items[0]?.destination || 'Store'}</td>
+              <td class="text-right" style="font-weight: bold;">RWF ${po.totalAmount.toLocaleString()}</td>
+              <td class="text-center" style="font-weight: bold; color: ${po.status === 'Received' ? 'green' : 'orange'};">
+                ${po.status === 'Received' ? '✓ Received' : '⏳ Pending'}
+              </td>
+              <td class="text-center" style="font-weight: bold; color: ${po.paymentStatus === 'Paid' ? 'green' : 'red'};">
+                ${po.paymentStatus || 'Paid'}
+              </td>
+            </tr>
+          `).join('')}
+          <tr class="total-row">
+            <td colspan="5">TOTAL PURCHASING SPEND</td>
+            <td class="text-right">RWF ${totalSpend.toLocaleString()}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="border-top: 1px dashed #94a3b8; margin-top: 25px; padding-top: 10px; display: flex; justify-content: space-between; font-size: 10px;">
+        <div>Purchasing Officer Sign: ___________________________</div>
+        <div>Auditor / Accountant Sign: ___________________________</div>
+      </div>
+    `;
+
+    printReportHTML(`Purchases Report - ${new Date().toISOString().split('T')[0]}`, html);
   };
 
   // Open Stock Transfer Modal
@@ -953,6 +1373,13 @@ export const StockManagement: React.FC<StockManagementProps> = ({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
+                onClick={handlePrintMainStockReport}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center space-x-2 border border-slate-700 shadow-md transition-all cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-amber-400" />
+                <span>🖨️ Main Stock Report</span>
+              </button>
+              <button
                 onClick={() => openMainStockModal()}
                 className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black text-xs flex items-center space-x-2 shadow-lg shadow-amber-500/30 transition-all cursor-pointer"
               >
@@ -1089,13 +1516,29 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                 Unified Kitchen Stock for raw materials, ingredients, and kitchen menu items. Direct gain upon purchasing.
               </p>
             </div>
-            <button
-              onClick={() => openPOModal('Kitchen')}
-              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
-            >
-              <Truck className="w-4 h-4" />
-              <span>+ Purchase Kitchen Stock</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handlePrintKitchenStockReport}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center space-x-2 border border-slate-700 shadow-md transition-all cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-emerald-400" />
+                <span>🖨️ Kitchen Stock Report</span>
+              </button>
+              <button
+                onClick={() => openKitchenStockModal()}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center space-x-2 shadow-lg shadow-emerald-500/30 transition-all cursor-pointer"
+              >
+                <Boxes className="w-4 h-4 text-slate-950" />
+                <span>✏️ Record & Edit Kitchen Stock</span>
+              </button>
+              <button
+                onClick={() => openPOModal('Kitchen')}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+              >
+                <Truck className="w-4 h-4" />
+                <span>+ Purchase Kitchen Stock</span>
+              </button>
+            </div>
           </div>
 
           <div className={`p-5 rounded-2xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
@@ -1143,16 +1586,23 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          <button
-                            onClick={() => {
-                              setSelectedItemForModal(item);
-                              setAdjustmentType('Purchase');
-                              setAdjustmentQuantity(10);
-                            }}
-                            className="px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 transition-all cursor-pointer"
-                          >
-                            Restock
-                          </button>
+                          <div className="flex justify-end items-center gap-1.5">
+                            <button
+                              onClick={() => openKitchenStockModal(item)}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] inline-flex items-center space-x-1 shadow-sm transition-all cursor-pointer"
+                              title="Edit / Record Kitchen Stock"
+                            >
+                              <Boxes className="w-3.5 h-3.5" />
+                              <span>Edit Kitchen Stock</span>
+                            </button>
+                            <button
+                              onClick={() => openPOModal('Kitchen', item, 25)}
+                              className="px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 transition-all cursor-pointer"
+                              title="Purchase order restock"
+                            >
+                              Restock PO
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1178,6 +1628,13 @@ export const StockManagement: React.FC<StockManagementProps> = ({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handlePrintPurchasesReport}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center space-x-2 border border-slate-700 shadow-md transition-all cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-sky-400" />
+                <span>🖨️ Purchases Report</span>
+              </button>
               {unavailableItems.filter(x => x.isOut).length > 0 && (
                 <button
                   onClick={handleBulkReorderUnavailable}
@@ -1427,19 +1884,37 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
-                          {po.status === 'Pending' ? (
+                          <div className="flex justify-end items-center gap-1.5">
+                            {po.status === 'Pending' && (
+                              <button
+                                onClick={() => onReceivePurchaseOrder && onReceivePurchaseOrder(po.id)}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[11px] inline-flex items-center space-x-1 shadow-md transition-all cursor-pointer"
+                                title="Accept order and intake stock"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Receive</span>
+                              </button>
+                            )}
                             <button
-                              onClick={() => onReceivePurchaseOrder && onReceivePurchaseOrder(po.id)}
-                              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[11px] inline-flex items-center space-x-1 shadow-md transition-all cursor-pointer"
+                              onClick={() => openEditPOModal(po)}
+                              className="px-2.5 py-1.5 rounded-lg bg-sky-600/80 hover:bg-sky-500 text-white font-bold text-[11px] inline-flex items-center space-x-1 shadow-sm transition-all cursor-pointer"
+                              title="Edit purchase order details"
                             >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Accept / Receive Order</span>
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Edit PO</span>
                             </button>
-                          ) : (
-                            <span className="text-[10px] text-gray-400">
-                              By {po.receivedByName || 'Admin'}
-                            </span>
-                          )}
+                            <button
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete purchase order "${po.poNumber}"?`)) {
+                                  onDeletePurchaseOrder && onDeletePurchaseOrder(po.id);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold text-[11px] inline-flex items-center space-x-1 border border-rose-500/30 transition-all cursor-pointer"
+                              title="Delete purchase order"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -2773,6 +3248,404 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                 >
                   <Check className="w-4 h-4" />
                   <span>Save & Record Main Stock</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD & EDIT KITCHEN STOCK CONSOLE MODAL */}
+      {showKitchenStockModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className={`max-w-lg w-full rounded-2xl p-6 border shadow-2xl space-y-4 ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-gray-900'
+          }`}>
+            <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Utensils className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base">Record & Edit Kitchen Stock</h3>
+                  <p className="text-xs text-gray-400">Directly record physical kitchen stock counts or edit item pricing & thresholds</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKitchenStockModal(false)}
+                className="text-gray-400 hover:text-white font-bold text-xl cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleKitchenStockSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Select Kitchen Item / Raw Material
+                </label>
+                <select
+                  value={kitchenStockItemId}
+                  onChange={(e) => handleKitchenStockItemChange(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                  required
+                >
+                  {menuItems.filter(m => isKitchenItem(m)).map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({item.category}) — Kitchen Stock: {item.stockQuantity || 0} {item.unit || 'portions'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {kitchenStockItemId && (() => {
+                const selectedItem = menuItems.find(m => m.id === kitchenStockItemId);
+                if (!selectedItem) return null;
+                const curQty = selectedItem.stockQuantity || 0;
+
+                return (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs flex justify-between items-center">
+                    <div>
+                      <span className="text-emerald-400 font-bold block">Current Kitchen Stock</span>
+                      <span className="font-black text-white text-base">{curQty} {selectedItem.unit || 'portions'}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-gray-400 block">Unit Cost / Price</span>
+                      <span className="font-bold text-emerald-300">RWF {(selectedItem.costPrice || Math.round(selectedItem.price * 0.6)).toLocaleString()}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Stock Recording Action Mode
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setKitchenStockMode('set')}
+                    className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      kitchenStockMode === 'set'
+                        ? 'bg-emerald-500 text-slate-950 shadow-md'
+                        : 'bg-slate-800/80 text-gray-400 border border-slate-700'
+                    }`}
+                  >
+                    Set Total Count
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKitchenStockMode('add')}
+                    className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      kitchenStockMode === 'add'
+                        ? 'bg-emerald-500 text-slate-950 shadow-md'
+                        : 'bg-slate-800/80 text-gray-400 border border-slate-700'
+                    }`}
+                  >
+                    + Add Gain
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKitchenStockMode('subtract')}
+                    className={`py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      kitchenStockMode === 'subtract'
+                        ? 'bg-rose-500 text-white shadow-md'
+                        : 'bg-slate-800/80 text-gray-400 border border-slate-700'
+                    }`}
+                  >
+                    - Deduct Loss
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  {kitchenStockMode === 'set' && 'New Total Kitchen Physical Stock'}
+                  {kitchenStockMode === 'add' && 'Quantity to Add to Kitchen Stock'}
+                  {kitchenStockMode === 'subtract' && 'Quantity to Deduct from Kitchen Stock'}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={kitchenStockQuantityValue}
+                  onChange={(e) => setKitchenStockQuantityValue(Math.max(0, parseInt(e.target.value) || 0))}
+                  className={`w-full p-2.5 rounded-xl border text-sm font-black ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-emerald-400' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Selling Price (RWF)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={kitchenStockPrice}
+                    onChange={(e) => setKitchenStockPrice(parseInt(e.target.value) || 0)}
+                    className={`w-full p-2 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Purchase / Unit Cost (RWF)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={kitchenStockCostPrice}
+                    onChange={(e) => setKitchenStockCostPrice(parseInt(e.target.value) || 0)}
+                    className={`w-full p-2 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Packaging Unit
+                  </label>
+                  <input
+                    type="text"
+                    value={kitchenStockUnit}
+                    onChange={(e) => setKitchenStockUnit(e.target.value)}
+                    placeholder="e.g. portions, kg, trays, liters"
+                    className={`w-full p-2 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Min Alert Threshold
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={kitchenStockMinAlert}
+                    onChange={(e) => setKitchenStockMinAlert(parseInt(e.target.value) || 5)}
+                    className={`w-full p-2 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Reason for Audit / Adjustment
+                </label>
+                <input
+                  type="text"
+                  value={kitchenStockReason}
+                  onChange={(e) => setKitchenStockReason(e.target.value)}
+                  placeholder="e.g. Kitchen Store Audit, Supplier Delivery, Spoilage"
+                  className={`w-full p-2.5 rounded-xl border text-xs ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                  required
+                />
+              </div>
+
+              <div className="flex space-x-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowKitchenStockModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center space-x-1"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save & Record Kitchen Stock</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PURCHASE ORDER CONSOLE MODAL */}
+      {showEditPOModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className={`max-w-xl w-full rounded-2xl p-6 border shadow-2xl space-y-4 ${
+            darkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-gray-900'
+          }`}>
+            <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base">Edit Purchase Order Console</h3>
+                  <p className="text-xs text-gray-400">Modify supplier, quantities, payment status, or fulfillment status</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditPOModal(false)}
+                className="text-gray-400 hover:text-white font-bold text-xl cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleEditPOSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Supplier Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editPoSupplier}
+                    onChange={(e) => setEditPoSupplier(e.target.value)}
+                    className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Target Department
+                  </label>
+                  <select
+                    value={editPoDepartment}
+                    onChange={(e) => setEditPoDepartment(e.target.value as 'Bar / Beverage' | 'Kitchen')}
+                    className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  >
+                    <option value="Bar / Beverage">Bar / Beverage</option>
+                    <option value="Kitchen">Kitchen</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Fulfillment Status
+                  </label>
+                  <select
+                    value={editPoStatus}
+                    onChange={(e) => setEditPoStatus(e.target.value as 'Pending' | 'Received')}
+                    className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  >
+                    <option value="Pending">⏳ Pending Acceptance</option>
+                    <option value="Received">✓ Received (Stock Gained)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">
+                    Payment Status
+                  </label>
+                  <select
+                    value={editPoPaymentStatus}
+                    onChange={(e) => setEditPoPaymentStatus(e.target.value as 'Paid' | 'Unpaid')}
+                    className={`w-full p-2.5 rounded-xl border text-xs font-bold ${
+                      darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                    }`}
+                  >
+                    <option value="Paid">✓ Paid</option>
+                    <option value="Unpaid">⚠️ Unpaid / Credit</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Order Items & Quantities
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {editPoItems.map((item, idx) => (
+                    <div key={idx} className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+                      <div>
+                        <span className="font-bold text-white block">{item.itemName}</span>
+                        <span className="text-[10px] text-gray-400">Destination: {item.destination}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div>
+                          <span className="text-[10px] text-gray-400 block">Qty</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = Math.max(1, parseInt(e.target.value) || 1);
+                              const newItems = [...editPoItems];
+                              newItems[idx] = { ...newItems[idx], quantity: val, totalCost: val * newItems[idx].unitCost };
+                              setEditPoItems(newItems);
+                            }}
+                            className="w-16 p-1 rounded-lg bg-slate-900 border border-slate-700 text-white font-bold text-center text-xs"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-gray-400 block">Unit Cost</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.unitCost}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              const newItems = [...editPoItems];
+                              newItems[idx] = { ...newItems[idx], unitCost: val, totalCost: newItems[idx].quantity * val };
+                              setEditPoItems(newItems);
+                            }}
+                            className="w-24 p-1 rounded-lg bg-slate-900 border border-slate-700 text-white font-bold text-center text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Order Notes / Receipt Reference
+                </label>
+                <input
+                  type="text"
+                  value={editPoNotes}
+                  onChange={(e) => setEditPoNotes(e.target.value)}
+                  placeholder="e.g. Invoice #10293, Paid via MoMo"
+                  className={`w-full p-2.5 rounded-xl border text-xs ${
+                    darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-200 text-gray-900'
+                  }`}
+                />
+              </div>
+
+              <div className="flex space-x-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditPOModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs shadow-lg shadow-sky-500/20 cursor-pointer flex items-center justify-center space-x-1"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Update Purchase Order</span>
                 </button>
               </div>
             </form>
