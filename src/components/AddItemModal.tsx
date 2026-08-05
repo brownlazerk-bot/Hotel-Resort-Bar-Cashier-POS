@@ -41,13 +41,23 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   });
 
   const addItemToPending = (item: MenuItem) => {
-    if (item.stockQuantity <= 0 && item.status === 'Out of Stock') {
-      alert(`${item.name} is out of stock!`);
+    const isOutOfStock = item.status === 'Out of Stock' || (typeof item.stockQuantity === 'number' && item.stockQuantity <= 0);
+    if (isOutOfStock) {
+      alert(`Sorry, "${item.name}" is out of stock / unavailable and cannot be added!`);
       return;
     }
 
     setNewItems(prev => {
       const idx = prev.findIndex(i => i.itemId === item.id);
+      const existingInOrder = order.items.find(i => i.itemId === item.id)?.quantity || 0;
+      const currentPending = idx > -1 ? prev[idx].quantity : 0;
+      const totalRequested = existingInOrder + currentPending + 1;
+
+      if (typeof item.stockQuantity === 'number' && totalRequested > item.stockQuantity) {
+        alert(`Cannot add more "${item.name}". Total available stock limit is ${item.stockQuantity} ${item.unit || 'pcs'}.`);
+        return prev;
+      }
+
       if (idx > -1) {
         const copy = [...prev];
         const newQty = copy[idx].quantity + 1;
@@ -75,11 +85,22 @@ export const AddItemModal: React.FC<AddItemModalProps> = ({
   };
 
   const updatePendingQty = (itemId: string, delta: number) => {
+    const targetItem = menuItems.find(m => m.id === itemId);
+
     setNewItems(prev => {
       return prev.map(item => {
         if (item.itemId === itemId) {
           const newQty = item.quantity + delta;
           if (newQty <= 0) return null;
+
+          if (delta > 0 && targetItem && typeof targetItem.stockQuantity === 'number') {
+            const existingInOrder = order.items.find(i => i.itemId === itemId)?.quantity || 0;
+            if (existingInOrder + newQty > targetItem.stockQuantity) {
+              alert(`Cannot increase quantity for "${targetItem.name}". Available stock limit is ${targetItem.stockQuantity} ${targetItem.unit || 'pcs'}.`);
+              return item;
+            }
+          }
+
           return {
             ...item,
             quantity: newQty,

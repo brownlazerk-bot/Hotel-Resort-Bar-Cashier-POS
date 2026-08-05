@@ -26,6 +26,39 @@ export type ProductSection =
 
 export type ItemStatus = 'Available' | 'Out of Stock';
 
+export interface RecipeIngredient {
+  ingredientId: string;
+  ingredientName: string;
+  quantity: number; // Required quantity per 1 portion/serving (e.g. 0.25)
+  unit: string; // e.g. 'Kg', 'Grams', 'Liters', 'Pieces', 'Pcs'
+  costPerUnit?: number; // Cost in RWF per unit
+}
+
+export type KitchenIngredientCategory = 
+  | 'Meat & Poultry' 
+  | 'Grains & Rice' 
+  | 'Vegetables & Produce' 
+  | 'Spices & Oils' 
+  | 'Dairy & Eggs' 
+  | 'Seafood' 
+  | 'Beverage Raw Materials'
+  | 'Other Raw Materials';
+
+export interface KitchenIngredient {
+  id: string; // e.g. "ing-101"
+  code?: string;
+  name: string; // e.g. "Chicken Meat", "White Rice", "Cooking Oil", "Tomatoes"
+  category: KitchenIngredientCategory;
+  stockQuantity: number; // e.g. 50 (in Kg, Liters, Pieces)
+  unit: string; // 'Kg', 'Grams', 'Liters', 'Pieces', 'Pcs'
+  costPerUnit: number; // e.g. 4500 RWF per Kg
+  minStockAlert: number; // e.g. 5 Kg
+  status: 'Available' | 'Low Stock' | 'Out of Stock';
+  lastRestocked?: string;
+  supplier?: string;
+  notes?: string;
+}
+
 export interface MenuItem {
   id: string;
   code?: string;
@@ -47,6 +80,8 @@ export interface MenuItem {
   linkedKitchenItem?: string;
   description?: string;
   minStockAlert?: number;
+  hasRecipe?: boolean;
+  recipe?: RecipeIngredient[];
 }
 
 export type TableStatus = 'Available' | 'Occupied' | 'Reserved' | 'Cleaning' | 'Out of Service';

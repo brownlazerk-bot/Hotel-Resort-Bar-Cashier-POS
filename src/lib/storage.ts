@@ -1,11 +1,12 @@
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, AppUser, AuditLog,
-  Expense, CashMovement, DailyClosingRecord, PurchaseOrder
+  Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient
 } from '../types';
 import { 
   INITIAL_MENU_ITEMS, INITIAL_TABLES, INITIAL_WAITERS, 
-  INITIAL_GUEST_ROOMS, INITIAL_ORDERS, INITIAL_KITCHEN_TICKETS 
+  INITIAL_GUEST_ROOMS, INITIAL_ORDERS, INITIAL_KITCHEN_TICKETS,
+  INITIAL_PURCHASE_ORDERS, INITIAL_KITCHEN_INGREDIENTS
 } from '../data/mockData';
 
 const KEYS = {
@@ -26,6 +27,7 @@ const KEYS = {
   CASH_MOVEMENTS: 'hotel_cash_movements_prod',
   DAILY_CLOSINGS: 'hotel_daily_closings_prod',
   PURCHASE_ORDERS: 'hotel_purchase_orders_prod',
+  KITCHEN_INGREDIENTS: 'hotel_kitchen_ingredients_prod',
 };
 
 export const SUPER_ADMIN_CREDENTIALS: AppUser = {
@@ -401,11 +403,30 @@ export function addDailyClosing(record: Omit<DailyClosingRecord, 'id' | 'closedA
 
 // Purchase Orders Storage
 export function loadPurchaseOrders(): PurchaseOrder[] {
-  return getStorage<PurchaseOrder[]>(KEYS.PURCHASE_ORDERS, []);
+  const stored = getStorage<PurchaseOrder[]>(KEYS.PURCHASE_ORDERS, []);
+  if (!stored || stored.length === 0) {
+    savePurchaseOrders(INITIAL_PURCHASE_ORDERS);
+    return INITIAL_PURCHASE_ORDERS;
+  }
+  return stored;
 }
 
 export function savePurchaseOrders(pos: PurchaseOrder[]): void {
   setStorage(KEYS.PURCHASE_ORDERS, pos);
+}
+
+// Kitchen Ingredients Storage
+export function loadIngredients(): KitchenIngredient[] {
+  const stored = getStorage<KitchenIngredient[]>(KEYS.KITCHEN_INGREDIENTS, []);
+  if (!stored || stored.length === 0) {
+    saveIngredients(INITIAL_KITCHEN_INGREDIENTS);
+    return INITIAL_KITCHEN_INGREDIENTS;
+  }
+  return stored;
+}
+
+export function saveIngredients(ingredients: KitchenIngredient[]): void {
+  setStorage(KEYS.KITCHEN_INGREDIENTS, ingredients);
 }
 
 export function resetAllDataToDefault(): void {

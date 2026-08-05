@@ -1,15 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  PackageCheck, AlertTriangle, Plus, Minus, Trash2, 
+  PackageCheck, AlertTriangle, Plus, Minus, Trash2, Edit3, X,
   Search, RefreshCw, FileText, ArrowUpRight, ArrowDownRight, History,
   Clock, ShoppingBag, Eye, ExternalLink, ShieldAlert, CheckCircle2, AlertCircle, Layers,
   Calendar, Download, ArrowRight, Printer, CheckSquare, Square, Utensils, Wine, Filter, Check,
   ArrowRightLeft, Store, Boxes, Truck, ArrowDownToLine, Building2, Sparkles, Lightbulb, ShoppingCart
 } from 'lucide-react';
-import { MenuItem, StockAdjustmentLog, Order, Table, Waiter, AppUser, PurchaseOrder } from '../types';
+import { MenuItem, StockAdjustmentLog, Order, Table, Waiter, AppUser, PurchaseOrder, KitchenIngredient, RecipeIngredient } from '../types';
 import { formatCurrency } from '../lib/currency';
 import { calculateStockMovementsForDate, ItemStockMovement } from '../lib/stockMovement';
 import { printReportHTML } from '../lib/exporter';
+import { KitchenRecipeManager } from './KitchenRecipeManager';
 
 import { Language, getTranslation } from '../lib/translations';
 
@@ -53,6 +54,9 @@ interface StockManagementProps {
   onEditPurchaseOrder?: (poId: string, updatedPO: Partial<PurchaseOrder>) => void;
   onDeletePurchaseOrder?: (poId: string) => void;
   onNavigateToOrders?: () => void;
+  ingredients?: KitchenIngredient[];
+  onSaveIngredients?: (ingredients: KitchenIngredient[]) => void;
+  onSaveRecipe?: (menuItemId: string, recipe: RecipeIngredient[]) => void;
   darkMode: boolean;
   language?: Language;
   loggedInUser?: AppUser;
@@ -65,6 +69,9 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   orders = [],
   tables = [],
   waiters = [],
+  ingredients = [],
+  onSaveIngredients,
+  onSaveRecipe,
   onUpdateStock,
   onUpdateMainStock,
   onUpdateKitchenStock,
@@ -79,7 +86,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   loggedInUser
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<
-    'main_beverage' | 'kitchen_stock' | 'purchasing' | 'transfers_log' | 'available' | 'unpaid_reserved' | 'reconciliation' | 'logs'
+    'main_beverage' | 'kitchen_stock' | 'recipes_ingredients' | 'purchasing' | 'transfers_log' | 'available' | 'unpaid_reserved' | 'reconciliation' | 'logs'
   >('main_beverage');
 
   // Main Beverage Stock Console / Recording & Edit State
@@ -1276,6 +1283,18 @@ export const StockManagement: React.FC<StockManagementProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveSubTab('recipes_ingredients')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
+            activeSubTab === 'recipes_ingredients'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}
+        >
+          <Layers className="w-4 h-4 text-amber-500" />
+          <span>Kitchen Recipes & Raw Ingredients (BOM)</span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('purchasing')}
           className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${
             activeSubTab === 'purchasing'
@@ -1614,6 +1633,17 @@ export const StockManagement: React.FC<StockManagementProps> = ({
         </div>
       )}
 
+      {/* VIEW: KITCHEN RECIPES & RAW INGREDIENTS (BOM) */}
+      {activeSubTab === 'recipes_ingredients' && (
+        <KitchenRecipeManager
+          menuItems={menuItems}
+          ingredients={ingredients || []}
+          onSaveIngredients={onSaveIngredients || (() => {})}
+          onSaveRecipe={onSaveRecipe || (() => {})}
+          darkMode={darkMode}
+        />
+      )}
+
       {/* VIEW: PURCHASING & GOODS INTAKE */}
       {activeSubTab === 'purchasing' && (
         <div className="space-y-6">
@@ -1878,22 +1908,41 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
                             po.status === 'Received'
                               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : po.status === 'Cancelled'
+                              ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                               : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse'
                           }`}>
-                            {po.status === 'Received' ? '✓ Received (Stock Gained)' : '⏳ Pending Acceptance'}
+                            {po.status === 'Received' ? '✓ Received (Stock Gained)' : po.status === 'Cancelled' ? '🚫 Cancelled' : '⏳ Pending Acceptance'}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right">
                           <div className="flex justify-end items-center gap-1.5">
                             {po.status === 'Pending' && (
-                              <button
-                                onClick={() => onReceivePurchaseOrder && onReceivePurchaseOrder(po.id)}
-                                className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[11px] inline-flex items-center space-x-1 shadow-md transition-all cursor-pointer"
-                                title="Accept order and intake stock"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Receive</span>
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Accept & Receive Purchase Order #${po.poNumber} (${po.supplierName})?\n\nThis will automatically update the current stock in ${po.items[0]?.destination || 'inventory'}.`)) {
+                                      onReceivePurchaseOrder && onReceivePurchaseOrder(po.id);
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] inline-flex items-center space-x-1 shadow-md transition-all cursor-pointer"
+                                  title="Accept order and intake stock into inventory"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Receive</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Cancel Purchase Order #${po.poNumber}?`)) {
+                                      onEditPurchaseOrder && onEditPurchaseOrder(po.id, { status: 'Cancelled' });
+                                    }
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-[11px] inline-flex items-center space-x-1 border border-amber-500/30 transition-all cursor-pointer"
+                                  title="Cancel purchase order"
+                                >
+                                  <span>Cancel PO</span>
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={() => openEditPOModal(po)}
@@ -1905,7 +1954,7 @@ export const StockManagement: React.FC<StockManagementProps> = ({
                             </button>
                             <button
                               onClick={() => {
-                                if (confirm(`Are you sure you want to delete purchase order "${po.poNumber}"?`)) {
+                                if (confirm(`Are you sure you want to permanently delete purchase order "${po.poNumber}"?`)) {
                                   onDeletePurchaseOrder && onDeletePurchaseOrder(po.id);
                                 }
                               }}

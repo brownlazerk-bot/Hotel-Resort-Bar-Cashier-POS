@@ -105,16 +105,22 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
   // Cart Actions
   const addToCart = (item: MenuItem) => {
-    if (item.stockQuantity <= 0 && item.status === 'Out of Stock') {
-      alert(`Sorry, ${item.name} is currently out of stock!`);
+    const isOutOfStock = item.status === 'Out of Stock' || (typeof item.stockQuantity === 'number' && item.stockQuantity <= 0);
+    if (isOutOfStock) {
+      alert(`Sorry, "${item.name}" is currently out of stock / unavailable and cannot be added to an order!`);
       return;
     }
 
     setCartItems(prev => {
       const existingIndex = prev.findIndex(i => i.itemId === item.id);
       if (existingIndex > -1) {
+        const currentQty = prev[existingIndex].quantity;
+        if (typeof item.stockQuantity === 'number' && currentQty + 1 > item.stockQuantity) {
+          alert(`Cannot add more "${item.name}". Maximum available stock is ${item.stockQuantity} ${item.unit || 'pcs'}.`);
+          return prev;
+        }
         const updated = [...prev];
-        const newQty = updated[existingIndex].quantity + 1;
+        const newQty = currentQty + 1;
         updated[existingIndex] = {
           ...updated[existingIndex],
           quantity: newQty,
@@ -140,11 +146,21 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   };
 
   const updateQuantity = (itemId: string, delta: number) => {
+    const targetItem = menuItems.find(m => m.id === itemId);
+
     setCartItems(prev => {
       return prev.map(item => {
         if (item.itemId === itemId) {
           const newQty = item.quantity + delta;
           if (newQty <= 0) return null;
+
+          if (delta > 0 && targetItem && typeof targetItem.stockQuantity === 'number') {
+            if (newQty > targetItem.stockQuantity) {
+              alert(`Cannot increase quantity. Maximum available stock for "${targetItem.name}" is ${targetItem.stockQuantity} ${targetItem.unit || 'pcs'}.`);
+              return item;
+            }
+          }
+
           return {
             ...item,
             quantity: newQty,
@@ -732,7 +748,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         {/* Menu Items Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[560px] overflow-y-auto pr-1">
           {filteredItems.map((item) => {
-            const isOutOfStock = item.stockQuantity <= 0 && item.status === 'Out of Stock';
+            const isOutOfStock = item.status === 'Out of Stock' || (typeof item.stockQuantity === 'number' && item.stockQuantity <= 0);
             return (
               <div
                 key={item.id}

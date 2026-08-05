@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser,
-  Expense, CashMovement, DailyClosingRecord, PurchaseOrder
+  Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient, RecipeIngredient
 } from './types';
 import { 
   loadMenuItems, saveMenuItems, loadTables, saveTables, 
@@ -19,7 +19,7 @@ import {
   loadExpenses, saveExpenses, addExpense,
   loadCashMovements, saveCashMovements, addCashMovement,
   loadDailyClosings, saveDailyClosings, addDailyClosing,
-  loadPurchaseOrders, savePurchaseOrders
+  loadPurchaseOrders, savePurchaseOrders, loadIngredients, saveIngredients
 } from './lib/storage';
 
 import { Header } from './components/Header';
@@ -69,6 +69,7 @@ export default function App() {
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [dailyClosings, setDailyClosings] = useState<DailyClosingRecord[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [ingredients, setIngredients] = useState<KitchenIngredient[]>([]);
 
   // Receipt Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
@@ -88,6 +89,7 @@ export default function App() {
     setCashMovements(loadCashMovements());
     setDailyClosings(loadDailyClosings());
     setPurchaseOrders(loadPurchaseOrders());
+    setIngredients(loadIngredients());
   };
 
   // Load Initial Data, Sync Engine, Online/Offline & Auto-Backup
@@ -286,6 +288,81 @@ export default function App() {
     saveCashMovements(newMovements);
   };
 
+  const updateIngredientsState = (newIngs: KitchenIngredient[]) => {
+    setIngredients(newIngs);
+    saveIngredients(newIngs);
+  };
+
+  const handleSaveIngredients = (newIngs: KitchenIngredient[]) => {
+    updateIngredientsState(newIngs);
+  };
+
+  const handleSaveRecipe = (menuItemId: string, recipe: RecipeIngredient[]) => {
+    const updated = menuItems.map(m => {
+      if (m.id === menuItemId) {
+        return {
+          ...m,
+          hasRecipe: recipe.length > 0,
+          recipe: recipe
+        };
+      }
+      return m;
+    });
+    updateMenuItemsState(updated);
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Save Dish Recipe',
+        category: 'Inventory',
+        details: `Saved ${recipe.length} ingredient recipe for ${menuItems.find(m => m.id === menuItemId)?.name || menuItemId}`
+      });
+    }
+  };
+
+  // Helper to deduct or restore raw ingredients for ordered items with recipes
+  const processOrderRecipeDeductions = (
+    orderItems: { itemId: string; quantity: number }[],
+    mode: 'deduct' | 'restore'
+  ) => {
+    let currentIngs = loadIngredients();
+    let hasChanges = false;
+
+    orderItems.forEach(item => {
+      const menuItem = menuItems.find(m => m.id === item.itemId);
+      if (menuItem && menuItem.hasRecipe && menuItem.recipe && menuItem.recipe.length > 0) {
+        menuItem.recipe.forEach(recItem => {
+          const ingIndex = currentIngs.findIndex(
+            g => g.id === recItem.ingredientId || g.name.toLowerCase() === recItem.ingredientName.toLowerCase()
+          );
+          if (ingIndex > -1) {
+            hasChanges = true;
+            const amount = recItem.quantity * item.quantity;
+            const prevStock = currentIngs[ingIndex].stockQuantity;
+            const newStock = mode === 'deduct'
+              ? Math.max(0, prevStock - amount)
+              : prevStock + amount;
+
+            const isOut = newStock <= 0;
+            const isLow = !isOut && newStock <= currentIngs[ingIndex].minStockAlert;
+
+            currentIngs[ingIndex] = {
+              ...currentIngs[ingIndex],
+              stockQuantity: newStock,
+              status: isOut ? 'Out of Stock' : (isLow ? 'Low Stock' : 'Available')
+            };
+          }
+        });
+      }
+    });
+
+    if (hasChanges) {
+      updateIngredientsState(currentIngs);
+    }
+  };
+
   const handleAddCashMovement = (mov: Omit<CashMovement, 'id' | 'timestamp' | 'date' | 'time'>) => {
     const created = addCashMovement(mov);
     setCashMovements(loadCashMovements());
@@ -358,6 +435,9 @@ export default function App() {
 
     updateMenuItemsState(updatedMenuItems);
     updateStockLogsState(newLogs);
+
+    // Automatic Recipe Ingredients Deduction for Kitchen Dishes
+    processOrderRecipeDeductions(completedOrder.items, 'deduct');
 
     // 3. Automatic Kitchen Order Ticket (Bon de Commande) handling
     if (newKot) {
@@ -467,6 +547,9 @@ export default function App() {
 
     updateMenuItemsState(updatedMenuItems);
     updateStockLogsState(newLogs);
+
+    // Restore raw ingredients for dishes with recipes
+    processOrderRecipeDeductions(orderToCancel.items, 'restore');
   };
 
   // Helper to release table if no other active unpaid order exists on it

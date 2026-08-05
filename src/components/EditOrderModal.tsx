@@ -84,6 +84,13 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
       handleRemoveItem(index);
       return;
     }
+    const itemInCart = items[index];
+    const targetMenuItem = menuItems.find(m => m.id === itemInCart.itemId);
+    if (targetMenuItem && typeof targetMenuItem.stockQuantity === 'number' && newQty > targetMenuItem.stockQuantity) {
+      alert(`Cannot set quantity to ${newQty}. Maximum available stock for "${targetMenuItem.name}" is ${targetMenuItem.stockQuantity} ${targetMenuItem.unit || 'pcs'}.`);
+      return;
+    }
+
     setItems(prev => {
       const copy = [...prev];
       copy[index] = {
@@ -102,11 +109,22 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({
 
   // Add Item to Order
   const handleAddItemToOrder = (menuItem: MenuItem) => {
+    const isOutOfStock = menuItem.status === 'Out of Stock' || (typeof menuItem.stockQuantity === 'number' && menuItem.stockQuantity <= 0);
+    if (isOutOfStock) {
+      alert(`Sorry, "${menuItem.name}" is currently out of stock / unavailable and cannot be added to this order.`);
+      return;
+    }
+
     setItems(prev => {
       const existingIdx = prev.findIndex(i => i.itemId === menuItem.id);
       if (existingIdx > -1) {
+        const currentQty = prev[existingIdx].quantity;
+        if (typeof menuItem.stockQuantity === 'number' && currentQty + 1 > menuItem.stockQuantity) {
+          alert(`Cannot add more "${menuItem.name}". Only ${menuItem.stockQuantity} ${menuItem.unit || 'pcs'} available in stock!`);
+          return prev;
+        }
         const copy = [...prev];
-        const updatedQty = copy[existingIdx].quantity + 1;
+        const updatedQty = currentQty + 1;
         copy[existingIdx] = {
           ...copy[existingIdx],
           quantity: updatedQty,
