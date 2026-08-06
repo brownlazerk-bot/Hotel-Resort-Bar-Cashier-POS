@@ -68,7 +68,7 @@ export const SUPER_ADMIN_CREDENTIALS: AppUser = {
   isSuperAdmin: true
 };
 
-// Ensure database starts completely empty for production
+// Ensure legacy sample keys are cleared without erasing current production keys
 function initializeCleanSlateIfNeeded() {
   try {
     const isInit = localStorage.getItem(KEYS.PROD_INIT);
@@ -84,18 +84,6 @@ function initializeCleanSlateIfNeeded() {
       localStorage.removeItem('bar_pos_current_shift');
       localStorage.removeItem('bar_pos_guest_rooms');
 
-      // Set clean empty defaults
-      localStorage.setItem(KEYS.MENU_ITEMS, JSON.stringify([]));
-      localStorage.setItem(KEYS.TABLES, JSON.stringify([]));
-      localStorage.setItem(KEYS.WAITERS, JSON.stringify([]));
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify([]));
-      localStorage.setItem(KEYS.KITCHEN_TICKETS, JSON.stringify([]));
-      localStorage.setItem(KEYS.STOCK_LOGS, JSON.stringify([]));
-      localStorage.setItem(KEYS.SHIFTS, JSON.stringify([]));
-      localStorage.setItem(KEYS.GUEST_ROOMS, JSON.stringify([]));
-      localStorage.setItem(KEYS.USERS, JSON.stringify([]));
-      localStorage.setItem(KEYS.AUDIT_LOGS, JSON.stringify([]));
-      
       localStorage.setItem(KEYS.PROD_INIT, 'true');
     }
   } catch (err) {

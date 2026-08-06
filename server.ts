@@ -126,6 +126,64 @@ app.post('/api/sync/key', (req, res) => {
   }
 });
 
+// Direct REST Database Endpoints for entities (ingredients, recipes, menuItems, categories, inventoryItems, stockMovements, users, businesses)
+app.get('/api/db/:entity', (req, res) => {
+  const { entity } = req.params;
+  const { businessId } = req.query;
+  const list = dbState[entity] || [];
+  if (businessId && Array.isArray(list)) {
+    const filtered = list.filter((item: any) => !item.businessId || item.businessId === businessId);
+    return res.json({ success: true, data: filtered });
+  }
+  res.json({ success: true, data: list });
+});
+
+app.post('/api/db/:entity', (req, res) => {
+  const { entity } = req.params;
+  const newItem = req.body;
+  if (!newItem) {
+    return res.status(400).json({ success: false, error: 'Invalid payload' });
+  }
+  if (!dbState[entity] || !Array.isArray(dbState[entity])) {
+    dbState[entity] = [];
+  }
+  const index = dbState[entity].findIndex((item: any) => item.id === newItem.id);
+  if (index > -1) {
+    dbState[entity][index] = { ...dbState[entity][index], ...newItem, updatedAt: new Date().toISOString() };
+  } else {
+    dbState[entity].unshift({ ...newItem, createdAt: newItem.createdAt || new Date().toISOString() });
+  }
+  dbState.lastUpdated = new Date().toISOString();
+  persistState();
+  res.json({ success: true, data: newItem, serverTime: new Date().toISOString() });
+});
+
+app.put('/api/db/:entity/:id', (req, res) => {
+  const { entity, id } = req.params;
+  const updatedItem = req.body;
+  if (!dbState[entity] || !Array.isArray(dbState[entity])) {
+    return res.status(444).json({ success: false, error: 'Entity array not found' });
+  }
+  const index = dbState[entity].findIndex((item: any) => item.id === id);
+  if (index > -1) {
+    dbState[entity][index] = { ...dbState[entity][index], ...updatedItem, updatedAt: new Date().toISOString() };
+    dbState.lastUpdated = new Date().toISOString();
+    persistState();
+    return res.json({ success: true, data: dbState[entity][index] });
+  }
+  res.status(404).json({ success: false, error: 'Item not found' });
+});
+
+app.delete('/api/db/:entity/:id', (req, res) => {
+  const { entity, id } = req.params;
+  if (dbState[entity] && Array.isArray(dbState[entity])) {
+    dbState[entity] = dbState[entity].filter((item: any) => item.id !== id);
+    dbState.lastUpdated = new Date().toISOString();
+    persistState();
+  }
+  res.json({ success: true, deletedId: id });
+});
+
 // Server Auth Verification endpoint for Super Admin & Staff
 app.post('/api/auth/verify', (req, res) => {
   const { email, password } = req.body;

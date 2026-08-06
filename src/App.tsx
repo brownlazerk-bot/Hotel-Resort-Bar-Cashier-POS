@@ -55,7 +55,7 @@ import { ManualReportSendModal } from './components/ManualReportSendModal';
 import { subscribeToSync, createDailyBackup, flushOfflineQueue } from './lib/syncEngine';
 import { startServerSyncPolling, pullServerState } from './lib/serverSync';
 import { startSupabaseSyncPolling, pullAllFromSupabase } from './lib/supabaseSync';
-import { WifiOff, RefreshCw, Bell } from 'lucide-react';
+import { WifiOff, RefreshCw, Bell, Database, AlertCircle, CheckCircle } from 'lucide-react';
 import { formatCurrency } from './lib/currency';
 
 import { Language } from './lib/translations';
@@ -67,6 +67,8 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole>('Cashier');
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [isDbLoading, setIsDbLoading] = useState<boolean>(true);
+  const [dbSyncError, setDbSyncError] = useState<string | null>(null);
 
   // Core Data States
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -144,13 +146,22 @@ export default function App() {
     // Start Supabase Cloud polling if configured
     const stopSupabasePolling = startSupabaseSyncPolling(4000);
 
-    // Initial pull from central server & Supabase
-    pullServerState().then(() => {
-      refreshAllStateFromStorage();
-    });
-    pullAllFromSupabase().then(() => {
-      refreshAllStateFromStorage();
-    });
+    // Initial pull from central database & Supabase
+    const loadDatabaseWithFeedback = async () => {
+      setIsDbLoading(true);
+      setDbSyncError(null);
+      try {
+        await pullServerState();
+        await pullAllFromSupabase();
+        refreshAllStateFromStorage();
+      } catch (err: any) {
+        setDbSyncError(err.message || 'Error connecting to database server');
+      } finally {
+        setIsDbLoading(false);
+      }
+    };
+
+    loadDatabaseWithFeedback();
 
     // Handle online/offline network transitions
     const handleOnline = () => {
@@ -1579,6 +1590,38 @@ export default function App() {
     <div className={`min-h-screen transition-colors duration-200 font-sans ${
       darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'
     }`}>
+
+      {/* Database Sync Status Banner */}
+      {isDbLoading ? (
+        <div className="bg-emerald-600 text-white px-4 py-1.5 text-xs font-medium flex items-center justify-between shadow-md">
+          <div className="flex items-center space-x-2">
+            <Database className="w-3.5 h-3.5 animate-spin" />
+            <span>Connecting to central database & syncing business records...</span>
+          </div>
+          <span className="text-[10px] bg-emerald-800 px-2 py-0.5 rounded font-mono uppercase tracking-wider">Database Live</span>
+        </div>
+      ) : dbSyncError ? (
+        <div className="bg-rose-900/90 text-rose-100 border-b border-rose-700 px-4 py-2 text-xs font-medium flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-300 shrink-0" />
+            <span>Database Connection Notice: {dbSyncError}</span>
+          </div>
+          <button 
+            onClick={async () => {
+              setIsDbLoading(true);
+              setDbSyncError(null);
+              await pullServerState();
+              await pullAllFromSupabase();
+              refreshAllStateFromStorage();
+              setIsDbLoading(false);
+            }}
+            className="flex items-center space-x-1 bg-rose-700 hover:bg-rose-600 text-white px-2.5 py-1 rounded text-xs font-semibold transition"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      ) : null}
 
       {/* Offline Mode Banner */}
       {!isOnline && (

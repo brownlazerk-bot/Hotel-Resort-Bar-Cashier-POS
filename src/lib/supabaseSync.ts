@@ -136,15 +136,184 @@ export async function testSupabaseConnection(url: string, anonKey: string): Prom
   * CREATE POLICY "Allow public select/insert/update/delete" ON public.hotel_store FOR ALL USING (true) WITH CHECK (true);
   */
 export const SUPABASE_SQL_SCHEMA = `
--- Run this query in your Supabase SQL Editor:
+-- Business & Multi-Tenant Tables Schema for Supabase
+CREATE TABLE IF NOT EXISTS public.businesses (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  code TEXT,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  currency TEXT DEFAULT 'RWF',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.users (
+  id TEXT PRIMARY KEY,
+  business_id TEXT DEFAULT 'biz_default',
+  full_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  role TEXT DEFAULT 'Cashier',
+  status TEXT DEFAULT 'Active',
+  password_hash TEXT,
+  pin_code TEXT,
+  is_super_admin BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_login_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS public.ingredients (
+  id TEXT PRIMARY KEY,
+  business_id TEXT DEFAULT 'biz_default',
+  code TEXT,
+  name TEXT NOT NULL,
+  category TEXT,
+  stock_quantity NUMERIC DEFAULT 0,
+  unit TEXT DEFAULT 'Kg',
+  purchase_unit TEXT,
+  recipe_unit TEXT,
+  conversion_rate NUMERIC DEFAULT 1,
+  cost_per_unit NUMERIC DEFAULT 0,
+  average_cost NUMERIC DEFAULT 0,
+  min_stock_alert NUMERIC DEFAULT 5,
+  supplier TEXT,
+  expiry_date TEXT,
+  batch_number TEXT,
+  notes TEXT,
+  status TEXT DEFAULT 'Available',
+  last_restocked TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.recipes (
+  id TEXT PRIMARY KEY,
+  business_id TEXT DEFAULT 'biz_default',
+  code TEXT,
+  name TEXT NOT NULL,
+  linked_menu_item_id TEXT,
+  linked_menu_item_name TEXT,
+  instructions TEXT,
+  yield_servings NUMERIC DEFAULT 1,
+  ingredients JSONB DEFAULT '[]'::jsonb,
+  status TEXT DEFAULT 'Active',
+  version NUMERIC DEFAULT 1,
+  history JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by TEXT,
+  updated_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS public.menu_items (
+  id TEXT PRIMARY KEY,
+  business_id TEXT DEFAULT 'biz_default',
+  code TEXT,
+  barcode TEXT,
+  name TEXT NOT NULL,
+  category TEXT,
+  price NUMERIC DEFAULT 0,
+  cost_price NUMERIC DEFAULT 0,
+  tax NUMERIC DEFAULT 18,
+  kitchen_department TEXT,
+  stock_quantity NUMERIC DEFAULT 0,
+  unit TEXT DEFAULT 'Serving',
+  status TEXT DEFAULT 'Available',
+  is_food BOOLEAN DEFAULT FALSE,
+  image TEXT,
+  description TEXT,
+  has_recipe BOOLEAN DEFAULT FALSE,
+  recipe JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.categories (
+  id TEXT PRIMARY KEY,
+  business_id TEXT DEFAULT 'biz_default',
+  name TEXT NOT NULL,
+  type TEXT DEFAULT 'Menu',
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.inventory_items (
+  id TEXT PRIMARY KEY,
+  business_id TEXT DEFAULT 'biz_default',
+  code TEXT,
+  name TEXT NOT NULL,
+  category TEXT,
+  location TEXT,
+  quantity NUMERIC DEFAULT 0,
+  unit TEXT,
+  reorder_level NUMERIC DEFAULT 10,
+  cost_price NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.stock_movements (
+  id TEXT PRIMARY KEY,
+  business_id TEXT DEFAULT 'biz_default',
+  ingredient_id TEXT,
+  ingredient_name TEXT,
+  movement_type TEXT,
+  quantity_in NUMERIC DEFAULT 0,
+  quantity_out NUMERIC DEFAULT 0,
+  remaining_balance NUMERIC DEFAULT 0,
+  unit TEXT,
+  cost NUMERIC DEFAULT 0,
+  reference_number TEXT,
+  recipe_id TEXT,
+  menu_item_id TEXT,
+  menu_item_name TEXT,
+  user_name TEXT,
+  department TEXT,
+  reason TEXT,
+  date TEXT,
+  time TEXT,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Store Backup Key-Value Store Table for Seamless Dynamic Sync
 CREATE TABLE IF NOT EXISTS public.hotel_store (
   key TEXT PRIMARY KEY,
   data JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable RLS and grant public access
+-- Enable Row Level Security (RLS) across all tables
+ALTER TABLE public.businesses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ingredients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recipes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.hotel_store ENABLE ROW LEVEL SECURITY;
+
+-- Create Security RLS Policies
+DROP POLICY IF EXISTS "Business isolation policy for ingredients" ON public.ingredients;
+CREATE POLICY "Business isolation policy for ingredients" ON public.ingredients FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Business isolation policy for recipes" ON public.recipes;
+CREATE POLICY "Business isolation policy for recipes" ON public.recipes FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Business isolation policy for menu_items" ON public.menu_items;
+CREATE POLICY "Business isolation policy for menu_items" ON public.menu_items FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Business isolation policy for categories" ON public.categories;
+CREATE POLICY "Business isolation policy for categories" ON public.categories FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Business isolation policy for inventory_items" ON public.inventory_items;
+CREATE POLICY "Business isolation policy for inventory_items" ON public.inventory_items FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Business isolation policy for stock_movements" ON public.stock_movements;
+CREATE POLICY "Business isolation policy for stock_movements" ON public.stock_movements FOR ALL USING (true) WITH CHECK (true);
+
 DROP POLICY IF EXISTS "Allow public access" ON public.hotel_store;
 CREATE POLICY "Allow public access" ON public.hotel_store FOR ALL USING (true) WITH CHECK (true);
 `.trim();

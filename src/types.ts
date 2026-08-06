@@ -53,6 +53,7 @@ export interface RecipeVersionRecord {
 
 export interface Recipe {
   id: string; // e.g. "REC-101"
+  businessId?: string;
   code: string; // e.g. "REC-101"
   name: string; // e.g. "Chicken Rice Recipe"
   linkedMenuItemId?: string; // ID of the linked MenuItem
@@ -69,6 +70,18 @@ export interface Recipe {
   updatedBy?: string;
 }
 
+export interface Business {
+  id: string; // e.g. "biz-01"
+  name: string; // e.g. "Serene Hotel & Restaurant"
+  code: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  currency?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export type KitchenIngredientCategory = 
   | 'Meat & Poultry' 
   | 'Grains & Rice' 
@@ -81,6 +94,7 @@ export type KitchenIngredientCategory =
 
 export interface KitchenIngredient {
   id: string; // e.g. "ing-101"
+  businessId?: string;
   code?: string;
   name: string; // e.g. "Chicken Meat", "White Rice", "Cooking Oil", "Tomatoes"
   category: KitchenIngredientCategory;
@@ -170,6 +184,7 @@ export interface KitchenWasteRecord {
 
 export interface MenuItem {
   id: string;
+  businessId?: string;
   code?: string;
   barcode?: string;
   name: string;
@@ -548,6 +563,7 @@ export type UserRole = SystemRole;
 
 export interface AppUser {
   id: string;
+  businessId?: string;
   fullName: string;
   email: string;
   phone: string;
