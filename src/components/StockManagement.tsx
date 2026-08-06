@@ -6,7 +6,7 @@ import {
   Calendar, Download, ArrowRight, Printer, CheckSquare, Square, Utensils, Wine, Filter, Check,
   ArrowRightLeft, Store, Boxes, Truck, ArrowDownToLine, Building2, Sparkles, Lightbulb, ShoppingCart
 } from 'lucide-react';
-import { MenuItem, StockAdjustmentLog, Order, Table, Waiter, AppUser, PurchaseOrder, KitchenIngredient, RecipeIngredient } from '../types';
+import { MenuItem, StockAdjustmentLog, Order, Table, Waiter, AppUser, PurchaseOrder, KitchenIngredient, RecipeIngredient, StockMovementRecord, KitchenWasteRecord } from '../types';
 import { formatCurrency } from '../lib/currency';
 import { calculateStockMovementsForDate, ItemStockMovement } from '../lib/stockMovement';
 import { printReportHTML } from '../lib/exporter';
@@ -55,8 +55,11 @@ interface StockManagementProps {
   onDeletePurchaseOrder?: (poId: string) => void;
   onNavigateToOrders?: () => void;
   ingredients?: KitchenIngredient[];
+  stockMovements?: StockMovementRecord[];
+  wasteRecords?: KitchenWasteRecord[];
   onSaveIngredients?: (ingredients: KitchenIngredient[]) => void;
   onSaveRecipe?: (menuItemId: string, recipe: RecipeIngredient[]) => void;
+  onAddWasteRecord?: (waste: Omit<KitchenWasteRecord, 'id' | 'timestamp' | 'date'>) => KitchenWasteRecord;
   darkMode: boolean;
   language?: Language;
   loggedInUser?: AppUser;
@@ -70,8 +73,11 @@ export const StockManagement: React.FC<StockManagementProps> = ({
   tables = [],
   waiters = [],
   ingredients = [],
+  stockMovements = [],
+  wasteRecords = [],
   onSaveIngredients,
   onSaveRecipe,
+  onAddWasteRecord,
   onUpdateStock,
   onUpdateMainStock,
   onUpdateKitchenStock,
@@ -1638,8 +1644,12 @@ export const StockManagement: React.FC<StockManagementProps> = ({
         <KitchenRecipeManager
           menuItems={menuItems}
           ingredients={ingredients || []}
+          stockMovements={stockMovements || []}
+          wasteRecords={wasteRecords || []}
           onSaveIngredients={onSaveIngredients || (() => {})}
           onSaveRecipe={onSaveRecipe || (() => {})}
+          onAddWasteRecord={onAddWasteRecord}
+          loggedInUser={loggedInUser}
           darkMode={darkMode}
         />
       )}

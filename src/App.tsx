@@ -7,7 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser,
-  Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient, RecipeIngredient
+  Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient, RecipeIngredient,
+  StockMovementRecord, KitchenWasteRecord
 } from './types';
 import { 
   loadMenuItems, saveMenuItems, loadTables, saveTables, 
@@ -19,8 +20,11 @@ import {
   loadExpenses, saveExpenses, addExpense,
   loadCashMovements, saveCashMovements, addCashMovement,
   loadDailyClosings, saveDailyClosings, addDailyClosing,
-  loadPurchaseOrders, savePurchaseOrders, loadIngredients, saveIngredients
+  loadPurchaseOrders, savePurchaseOrders, loadIngredients, saveIngredients,
+  loadStockMovementRecords, saveStockMovementRecords, addStockMovementRecord,
+  loadWasteRecords, saveWasteRecords, addWasteRecord
 } from './lib/storage';
+import { convertRecipeQtyToStoreQty, calculateEffectiveRecipeQty } from './lib/unitConversion';
 
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
@@ -70,6 +74,8 @@ export default function App() {
   const [dailyClosings, setDailyClosings] = useState<DailyClosingRecord[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [ingredients, setIngredients] = useState<KitchenIngredient[]>([]);
+  const [stockMovements, setStockMovements] = useState<StockMovementRecord[]>([]);
+  const [wasteRecords, setWasteRecords] = useState<KitchenWasteRecord[]>([]);
 
   // Receipt Modal State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
@@ -90,6 +96,8 @@ export default function App() {
     setDailyClosings(loadDailyClosings());
     setPurchaseOrders(loadPurchaseOrders());
     setIngredients(loadIngredients());
+    setStockMovements(loadStockMovementRecords());
+    setWasteRecords(loadWasteRecords());
   };
 
   // Load Initial Data, Sync Engine, Online/Offline & Auto-Backup
@@ -322,10 +330,73 @@ export default function App() {
     }
   };
 
+  // Helper to handle waste record creation
+  const handleAddWasteRecord = (waste: Omit<KitchenWasteRecord, 'id' | 'timestamp' | 'date'>) => {
+    const created = addWasteRecord(waste);
+    setWasteRecords(loadWasteRecords());
+
+    // Deduct ingredient stock automatically
+    let currentIngs = loadIngredients();
+    const idx = currentIngs.findIndex(g => g.id === waste.ingredientId);
+    if (idx > -1) {
+      const ing = currentIngs[idx];
+      const storeQtyDeducted = convertRecipeQtyToStoreQty(
+        waste.quantity,
+        waste.unit,
+        ing.unit,
+        ing.conversionRate
+      );
+      const newStock = Math.max(0, ing.stockQuantity - storeQtyDeducted);
+      const isOut = newStock <= 0;
+      const isLow = !isOut && newStock <= ing.minStockAlert;
+
+      currentIngs[idx] = {
+        ...ing,
+        stockQuantity: newStock,
+        status: isOut ? 'Out of Stock' : (isLow ? 'Low Stock' : 'Available')
+      };
+      updateIngredientsState(currentIngs);
+
+      // Record Stock Movement Record for Waste
+      addStockMovementRecord({
+        ingredientId: ing.id,
+        ingredientName: ing.name,
+        movementType: waste.wasteType === 'Expired' ? 'Expired Items' : 'Waste',
+        quantityIn: 0,
+        quantityOut: storeQtyDeducted,
+        remainingBalance: newStock,
+        unit: ing.unit,
+        cost: waste.totalCost,
+        referenceNumber: created.id,
+        user: waste.reportedBy || currentUser?.fullName || 'Staff',
+        department: waste.department || 'Kitchen',
+        reason: `${waste.wasteType} Waste: ${waste.reason}`,
+        notes: waste.notes
+      });
+      setStockMovements(loadStockMovementRecords());
+    }
+
+    if (currentUser) {
+      addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        userRole: currentUser.role,
+        userEmail: currentUser.email,
+        action: 'Record Kitchen Waste',
+        category: 'Inventory',
+        details: `Recorded ${waste.quantity} ${waste.unit} waste for ${waste.ingredientName} (${waste.wasteType})`
+      });
+    }
+
+    return created;
+  };
+
   // Helper to deduct or restore raw ingredients for ordered items with recipes
   const processOrderRecipeDeductions = (
-    orderItems: { itemId: string; quantity: number }[],
-    mode: 'deduct' | 'restore'
+    orderItems: { itemId: string; name?: string; quantity: number }[],
+    mode: 'deduct' | 'restore',
+    referenceId?: string,
+    departmentName: string = 'Restaurant POS'
   ) => {
     let currentIngs = loadIngredients();
     let hasChanges = false;
@@ -334,25 +405,66 @@ export default function App() {
       const menuItem = menuItems.find(m => m.id === item.itemId);
       if (menuItem && menuItem.hasRecipe && menuItem.recipe && menuItem.recipe.length > 0) {
         menuItem.recipe.forEach(recItem => {
+          if (recItem.active === false) return; // Skip inactive recipe items
+
           const ingIndex = currentIngs.findIndex(
             g => g.id === recItem.ingredientId || g.name.toLowerCase() === recItem.ingredientName.toLowerCase()
           );
           if (ingIndex > -1) {
             hasChanges = true;
-            const amount = recItem.quantity * item.quantity;
-            const prevStock = currentIngs[ingIndex].stockQuantity;
+            const ing = currentIngs[ingIndex];
+
+            // 1. Calculate effective quantity required including waste/yield
+            const effectiveRecipeQtyPerPortion = calculateEffectiveRecipeQty(
+              recItem.quantity,
+              recItem.wastePercentage || 0,
+              recItem.yieldPercentage || 100
+            );
+            const totalRecipeQtyRequired = effectiveRecipeQtyPerPortion * item.quantity;
+
+            // 2. Convert from recipe unit to ingredient store unit
+            const storeQtyAmount = convertRecipeQtyToStoreQty(
+              totalRecipeQtyRequired,
+              recItem.unit,
+              ing.unit,
+              ing.conversionRate
+            );
+
+            const prevStock = ing.stockQuantity;
             const newStock = mode === 'deduct'
-              ? Math.max(0, prevStock - amount)
-              : prevStock + amount;
+              ? Math.max(0, prevStock - storeQtyAmount)
+              : prevStock + storeQtyAmount;
 
             const isOut = newStock <= 0;
-            const isLow = !isOut && newStock <= currentIngs[ingIndex].minStockAlert;
+            const isLow = !isOut && newStock <= ing.minStockAlert;
 
             currentIngs[ingIndex] = {
-              ...currentIngs[ingIndex],
+              ...ing,
               stockQuantity: newStock,
               status: isOut ? 'Out of Stock' : (isLow ? 'Low Stock' : 'Available')
             };
+
+            // 3. Log Stock Movement Record
+            const movementCost = storeQtyAmount * ing.costPerUnit;
+            addStockMovementRecord({
+              ingredientId: ing.id,
+              ingredientName: ing.name,
+              movementType: mode === 'deduct' ? 'Recipe Consumption' : 'Return',
+              quantityIn: mode === 'restore' ? storeQtyAmount : 0,
+              quantityOut: mode === 'deduct' ? storeQtyAmount : 0,
+              remainingBalance: newStock,
+              unit: ing.unit,
+              cost: movementCost,
+              referenceNumber: referenceId,
+              recipeId: recItem.recipeId || menuItem.id,
+              menuItemId: menuItem.id,
+              menuItemName: menuItem.name,
+              user: currentUser?.fullName || 'Cashier',
+              department: departmentName,
+              reason: mode === 'deduct' 
+                ? `Auto recipe deduction for ${item.quantity}x ${menuItem.name}`
+                : `Order Reversal/Cancellation restore for ${item.quantity}x ${menuItem.name}`
+            });
           }
         });
       }
@@ -360,6 +472,7 @@ export default function App() {
 
     if (hasChanges) {
       updateIngredientsState(currentIngs);
+      setStockMovements(loadStockMovementRecords());
     }
   };
 
@@ -1560,6 +1673,7 @@ export default function App() {
             tables={tables}
             waiters={waiters}
             guestRooms={guestRooms}
+            ingredients={ingredients}
             currentShift={currentShift}
             onOrderCompleted={handleOrderCompleted}
             darkMode={darkMode}
@@ -1611,6 +1725,12 @@ export default function App() {
             orders={orders}
             tables={tables}
             waiters={waiters}
+            ingredients={ingredients}
+            stockMovements={stockMovements}
+            wasteRecords={wasteRecords}
+            onSaveIngredients={handleSaveIngredients}
+            onSaveRecipe={handleSaveRecipe}
+            onAddWasteRecord={handleAddWasteRecord}
             onUpdateStock={handleUpdateStock}
             onUpdateMainStock={handleUpdateMainStock}
             onUpdateKitchenStock={handleUpdateKitchenStock}

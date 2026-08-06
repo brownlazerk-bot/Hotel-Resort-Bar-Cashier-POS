@@ -7,9 +7,10 @@ import {
 import { 
   MenuItem, Table, Waiter, GuestRoom, Order, OrderItem, 
   Category, PaymentMethod, PaymentDetails, Shift, KitchenTicket,
-  PaymentStatus, OrderStatus, AppUser 
+  PaymentStatus, OrderStatus, AppUser, KitchenIngredient 
 } from '../types';
 import { formatCurrency } from '../lib/currency';
+import { convertRecipeQtyToStoreQty, calculateEffectiveRecipeQty } from '../lib/unitConversion';
 import { 
   printKotThermalTicket, 
   printPoolTokenTicket, 
@@ -24,6 +25,7 @@ interface PosTerminalProps {
   tables: Table[];
   waiters: Waiter[];
   guestRooms: GuestRoom[];
+  ingredients?: KitchenIngredient[];
   currentShift: Shift | null;
   onOrderCompleted: (order: Order, newKot?: KitchenTicket) => void;
   darkMode: boolean;
@@ -37,6 +39,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   tables,
   waiters,
   guestRooms,
+  ingredients = [],
   currentShift,
   onOrderCompleted,
   darkMode,
@@ -81,6 +84,74 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const [momoPaidInput, setMomoPaidInput] = useState<string>('');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [paymentError, setPaymentError] = useState<string>('');
+
+  // Insufficient Ingredients Modal State
+  const [insufficientModalOpen, setInsufficientModalOpen] = useState(false);
+  const [insufficientList, setInsufficientList] = useState<{
+    ingredientName: string;
+    requiredQuantity: string;
+    availableQuantity: string;
+    missingQuantity: string;
+  }[]>([]);
+
+  // Validate recipe stock availability
+  const validateRecipeStock = (itemsToValidate: OrderItem[]) => {
+    if (!ingredients || ingredients.length === 0) return [];
+
+    const requiredStoreQtyMap: { [ingId: string]: { required: number; ing: KitchenIngredient } } = {};
+
+    itemsToValidate.forEach(cartItem => {
+      const menuItem = menuItems.find(m => m.id === cartItem.itemId);
+      if (menuItem && menuItem.hasRecipe && menuItem.recipe && menuItem.recipe.length > 0) {
+        menuItem.recipe.forEach(recItem => {
+          if (recItem.active === false) return;
+          const ing = ingredients.find(
+            g => g.id === recItem.ingredientId || g.name.toLowerCase() === recItem.ingredientName.toLowerCase()
+          );
+          if (ing) {
+            const effectiveRecipeQtyPerServ = calculateEffectiveRecipeQty(
+              recItem.quantity,
+              recItem.wastePercentage || 0,
+              recItem.yieldPercentage || 100
+            );
+            const totalRecipeQty = effectiveRecipeQtyPerServ * cartItem.quantity;
+            const storeQtyNeeded = convertRecipeQtyToStoreQty(
+              totalRecipeQty,
+              recItem.unit,
+              ing.unit,
+              ing.conversionRate
+            );
+
+            if (!requiredStoreQtyMap[ing.id]) {
+              requiredStoreQtyMap[ing.id] = { required: 0, ing };
+            }
+            requiredStoreQtyMap[ing.id].required += storeQtyNeeded;
+          }
+        });
+      }
+    });
+
+    const missing: {
+      ingredientName: string;
+      requiredQuantity: string;
+      availableQuantity: string;
+      missingQuantity: string;
+    }[] = [];
+
+    Object.values(requiredStoreQtyMap).forEach(({ required, ing }) => {
+      if (required > ing.stockQuantity) {
+        const missingQty = required - ing.stockQuantity;
+        missing.push({
+          ingredientName: ing.name,
+          requiredQuantity: `${required.toFixed(2)} ${ing.unit}`,
+          availableQuantity: `${ing.stockQuantity.toFixed(2)} ${ing.unit}`,
+          missingQuantity: `${missingQty.toFixed(2)} ${ing.unit}`
+        });
+      }
+    });
+
+    return missing;
+  };
 
   const categories: string[] = [
     'All', 'Beers', 'Soft Drinks', 'Wines', 'Whisky', 
@@ -192,6 +263,13 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const handleSendOrderToCashierAndKitchen = () => {
     if (cartItems.length === 0) {
       alert('Please add items to cart before submitting order.');
+      return;
+    }
+
+    const missingIngs = validateRecipeStock(cartItems);
+    if (missingIngs.length > 0) {
+      setInsufficientList(missingIngs);
+      setInsufficientModalOpen(true);
       return;
     }
 
@@ -348,6 +426,13 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     }
     if (cartItems.length === 0) {
       alert('Please add items to cart before checkout.');
+      return;
+    }
+
+    const missingIngs = validateRecipeStock(cartItems);
+    if (missingIngs.length > 0) {
+      setInsufficientList(missingIngs);
+      setInsufficientModalOpen(true);
       return;
     }
 
@@ -1191,6 +1276,60 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Insufficient Raw Ingredients Validation Modal */}
+      {insufficientModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border-2 border-rose-500/80 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center space-x-3 pb-3 border-b border-slate-800">
+              <div className="p-2.5 rounded-2xl bg-rose-500/20 text-rose-500 border border-rose-500/40">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-base text-white">Insufficient Raw Ingredient Stock</h3>
+                <p className="text-xs text-rose-400">Order blocked due to missing recipe raw materials</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-slate-300">
+                The requested dishes require ingredients that exceed current kitchen inventory balances:
+              </p>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {insufficientList.map((item, idx) => (
+                  <div key={idx} className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-1 text-xs">
+                    <p className="font-bold text-amber-400">{item.ingredientName}</p>
+                    <div className="grid grid-cols-3 gap-2 text-[10px] pt-1">
+                      <div>
+                        <span className="text-slate-500 block">Required:</span>
+                        <span className="font-mono font-bold text-white">{item.requiredQuantity}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Available:</span>
+                        <span className="font-mono font-bold text-emerald-400">{item.availableQuantity}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Missing:</span>
+                        <span className="font-mono font-bold text-rose-500">{item.missingQuantity}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setInsufficientModalOpen(false)}
+                className="px-5 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs cursor-pointer"
+              >
+                Close & Modify Order
+              </button>
+            </div>
           </div>
         </div>
       )}

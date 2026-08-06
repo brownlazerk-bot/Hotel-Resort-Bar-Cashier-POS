@@ -27,11 +27,18 @@ export type ProductSection =
 export type ItemStatus = 'Available' | 'Out of Stock';
 
 export interface RecipeIngredient {
+  id?: string;
+  recipeId?: string;
   ingredientId: string;
   ingredientName: string;
-  quantity: number; // Required quantity per 1 portion/serving (e.g. 0.25)
-  unit: string; // e.g. 'Kg', 'Grams', 'Liters', 'Pieces', 'Pcs'
+  quantity: number; // Required quantity per 1 portion/serving (e.g. 250 g or 0.25 Kg)
+  unit: string; // e.g. 'g', 'Kg', 'ml', 'Litre', 'Piece', 'Bottle', 'Can', 'Pack'
   costPerUnit?: number; // Cost in RWF per unit
+  wastePercentage?: number; // e.g. 5 (%)
+  yieldPercentage?: number; // e.g. 95 (%)
+  preparationNotes?: string;
+  optional?: boolean;
+  active?: boolean;
 }
 
 export type KitchenIngredientCategory = 
@@ -49,13 +56,87 @@ export interface KitchenIngredient {
   code?: string;
   name: string; // e.g. "Chicken Meat", "White Rice", "Cooking Oil", "Tomatoes"
   category: KitchenIngredientCategory;
-  stockQuantity: number; // e.g. 50 (in Kg, Liters, Pieces)
-  unit: string; // 'Kg', 'Grams', 'Liters', 'Pieces', 'Pcs'
-  costPerUnit: number; // e.g. 4500 RWF per Kg
-  minStockAlert: number; // e.g. 5 Kg
+  stockQuantity: number; // Current stock balance in store
+  unit: string; // Default store unit (e.g., 'Kg', 'Litre', 'Piece', 'Box', 'Tray')
+  purchaseUnit?: string; // e.g. 'Kg', 'Box', 'Litre'
+  recipeUnit?: string; // e.g. 'g', 'ml', 'Piece', 'Bottle'
+  conversionRate?: number; // e.g. 1000 (1 Kg = 1000 g), 24 (1 Box = 24 Bottles)
+  costPerUnit: number; // e.g. 4500 RWF per Kg/unit
+  averageCost?: number; // Average purchase cost
+  minStockAlert: number; // Low stock alert threshold
+  maxStock?: number; // Maximum stock threshold
+  storageLocation?: string; // e.g. "Main Cold Room #1", "Kitchen Dry Store"
+  expiryDate?: string; // YYYY-MM-DD
+  batchNumber?: string;
   status: 'Available' | 'Low Stock' | 'Out of Stock';
   lastRestocked?: string;
   supplier?: string;
+  notes?: string;
+}
+
+export type StockMovementType = 
+  | 'Purchase' 
+  | 'Opening Stock' 
+  | 'Kitchen Consumption' 
+  | 'Recipe Consumption' 
+  | 'Stock Adjustment' 
+  | 'Waste' 
+  | 'Spoilage' 
+  | 'Expired Items' 
+  | 'Transfer' 
+  | 'Production' 
+  | 'Return' 
+  | 'Supplier Return' 
+  | 'Manual Correction' 
+  | 'Inventory Count';
+
+export interface StockMovementRecord {
+  id: string; // e.g. "MOV-9001"
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm:ss
+  timestamp: string; // ISO string
+  ingredientId: string;
+  ingredientName: string;
+  movementType: StockMovementType;
+  quantityIn: number; // 0 if outgoing
+  quantityOut: number; // 0 if incoming
+  remainingBalance: number;
+  unit: string;
+  cost: number; // Total value of movement in RWF
+  referenceNumber?: string; // e.g., Order ID, KOT ID, PO Number, Waste ID
+  recipeId?: string;
+  menuItemId?: string;
+  menuItemName?: string;
+  user: string;
+  department: string; // e.g., 'Restaurant POS', 'Bar POS', 'Room Service', 'Kitchen', 'Main Store'
+  reason?: string;
+  notes?: string;
+}
+
+export type WasteType = 
+  | 'Burnt' 
+  | 'Expired' 
+  | 'Broken' 
+  | 'Spoiled' 
+  | 'Cooking Error' 
+  | 'Returned Plate' 
+  | 'Over Production';
+
+export interface KitchenWasteRecord {
+  id: string; // e.g. "WST-1001"
+  date: string; // YYYY-MM-DD
+  timestamp: string; // ISO
+  ingredientId: string;
+  ingredientName: string;
+  wasteType: WasteType;
+  quantity: number;
+  unit: string;
+  costPerUnit: number;
+  totalCost: number;
+  reportedBy: string; // Chef / Staff name
+  approvedBy?: string; // Manager / Chef
+  reason: string;
+  department: string;
   notes?: string;
 }
 

@@ -1,7 +1,8 @@
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, AppUser, AuditLog,
-  Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient
+  Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient,
+  StockMovementRecord, KitchenWasteRecord
 } from '../types';
 import { 
   INITIAL_MENU_ITEMS, INITIAL_TABLES, INITIAL_WAITERS, 
@@ -28,6 +29,8 @@ const KEYS = {
   DAILY_CLOSINGS: 'hotel_daily_closings_prod',
   PURCHASE_ORDERS: 'hotel_purchase_orders_prod',
   KITCHEN_INGREDIENTS: 'hotel_kitchen_ingredients_prod',
+  STOCK_MOVEMENT_RECORDS: 'hotel_stock_movement_records_prod',
+  KITCHEN_WASTE_RECORDS: 'hotel_kitchen_waste_records_prod',
 };
 
 export const SUPER_ADMIN_CREDENTIALS: AppUser = {
@@ -427,6 +430,54 @@ export function loadIngredients(): KitchenIngredient[] {
 
 export function saveIngredients(ingredients: KitchenIngredient[]): void {
   setStorage(KEYS.KITCHEN_INGREDIENTS, ingredients);
+}
+
+// Stock Movement Records Ledger Storage
+export function loadStockMovementRecords(): StockMovementRecord[] {
+  return getStorage<StockMovementRecord[]>(KEYS.STOCK_MOVEMENT_RECORDS, []);
+}
+
+export function saveStockMovementRecords(records: StockMovementRecord[]): void {
+  setStorage(KEYS.STOCK_MOVEMENT_RECORDS, records);
+}
+
+export function addStockMovementRecord(rec: Omit<StockMovementRecord, 'id' | 'timestamp' | 'date' | 'time'>): StockMovementRecord {
+  const records = loadStockMovementRecords();
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const time = now.toTimeString().split(' ')[0];
+  const created: StockMovementRecord = {
+    ...rec,
+    id: `MOV-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    date,
+    time,
+    timestamp: now.toISOString()
+  };
+  saveStockMovementRecords([created, ...records]);
+  return created;
+}
+
+// Kitchen Waste Records Storage
+export function loadWasteRecords(): KitchenWasteRecord[] {
+  return getStorage<KitchenWasteRecord[]>(KEYS.KITCHEN_WASTE_RECORDS, []);
+}
+
+export function saveWasteRecords(records: KitchenWasteRecord[]): void {
+  setStorage(KEYS.KITCHEN_WASTE_RECORDS, records);
+}
+
+export function addWasteRecord(rec: Omit<KitchenWasteRecord, 'id' | 'timestamp' | 'date'>): KitchenWasteRecord {
+  const records = loadWasteRecords();
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const created: KitchenWasteRecord = {
+    ...rec,
+    id: `WST-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    date,
+    timestamp: now.toISOString()
+  };
+  saveWasteRecords([created, ...records]);
+  return created;
 }
 
 export function resetAllDataToDefault(): void {

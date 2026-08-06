@@ -8,122 +8,6 @@ export const INITIAL_ACTIVE_SHIFT: Shift | null = null;
 export const INITIAL_ORDERS: Order[] = [];
 export const INITIAL_KITCHEN_TICKETS: KitchenTicket[] = [];
 
-export const INITIAL_KITCHEN_INGREDIENTS: KitchenIngredient[] = [
-  {
-    id: 'ing-101',
-    code: 'ING-01',
-    name: 'Fresh Chicken Meat',
-    category: 'Meat & Poultry',
-    stockQuantity: 40,
-    unit: 'Kg',
-    costPerUnit: 4500,
-    minStockAlert: 8,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0],
-    notes: 'Whole fresh chicken cutlets for Poulet Frit and Chicken Rice'
-  },
-  {
-    id: 'ing-102',
-    code: 'ING-02',
-    name: 'White Rice (Riz Blanc)',
-    category: 'Grains & Rice',
-    stockQuantity: 100,
-    unit: 'Kg',
-    costPerUnit: 1200,
-    minStockAlert: 15,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0],
-    notes: 'Long grain rice for kitchen dishes'
-  },
-  {
-    id: 'ing-103',
-    code: 'ING-03',
-    name: 'Fresh Beef Fillet',
-    category: 'Meat & Poultry',
-    stockQuantity: 30,
-    unit: 'Kg',
-    costPerUnit: 4800,
-    minStockAlert: 6,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0],
-    notes: 'Premium beef cut for Brochettes and Beef Stew'
-  },
-  {
-    id: 'ing-104',
-    code: 'ING-04',
-    name: 'Cooking Vegetable Oil',
-    category: 'Spices & Oils',
-    stockQuantity: 25,
-    unit: 'Liters',
-    costPerUnit: 2200,
-    minStockAlert: 5,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0],
-    notes: 'Refined cooking oil for frying and sautéing'
-  },
-  {
-    id: 'ing-105',
-    code: 'ING-05',
-    name: 'Fresh Tomatoes',
-    category: 'Vegetables & Produce',
-    stockQuantity: 30,
-    unit: 'Kg',
-    costPerUnit: 800,
-    minStockAlert: 5,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0]
-  },
-  {
-    id: 'ing-106',
-    code: 'ING-06',
-    name: 'Onions & Garlic',
-    category: 'Vegetables & Produce',
-    stockQuantity: 20,
-    unit: 'Kg',
-    costPerUnit: 1000,
-    minStockAlert: 4,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0]
-  },
-  {
-    id: 'ing-107',
-    code: 'ING-07',
-    name: 'Irish Potatoes (Ibirayi)',
-    category: 'Vegetables & Produce',
-    stockQuantity: 80,
-    unit: 'Kg',
-    costPerUnit: 600,
-    minStockAlert: 15,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0],
-    notes: 'Potatoes for Frites / French Fries'
-  },
-  {
-    id: 'ing-108',
-    code: 'ING-08',
-    name: 'Spaghetti / Pasta',
-    category: 'Grains & Rice',
-    stockQuantity: 35,
-    unit: 'Kg',
-    costPerUnit: 1500,
-    minStockAlert: 5,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0]
-  },
-  {
-    id: 'ing-109',
-    code: 'ING-09',
-    name: 'Tilapia Fish (Piscine)',
-    category: 'Seafood',
-    stockQuantity: 20,
-    unit: 'Kg',
-    costPerUnit: 3800,
-    minStockAlert: 5,
-    status: 'Available',
-    lastRestocked: new Date().toISOString().split('T')[0]
-  }
-];
-
 export const INITIAL_PURCHASE_ORDERS: PurchaseOrder[] = [
   {
     id: 'PO-1001',
@@ -205,6 +89,119 @@ export const INITIAL_PURCHASE_ORDERS: PurchaseOrder[] = [
     paymentStatus: 'Paid',
     createdByName: 'Chef Eric Nshuti',
     notes: 'Kitchen raw material restock order'
+  }
+];
+
+export const INITIAL_KITCHEN_INGREDIENTS: KitchenIngredient[] = [
+  {
+    id: 'ing-101',
+    code: 'RAW-01',
+    name: 'Fresh Chicken Meat',
+    category: 'Meat & Poultry',
+    stockQuantity: 45,
+    unit: 'Kg',
+    purchaseUnit: 'Kg',
+    recipeUnit: 'g',
+    conversionRate: 1000,
+    costPerUnit: 3800,
+    averageCost: 3650,
+    minStockAlert: 10,
+    maxStock: 100,
+    storageLocation: 'Cold Room #1 (Meat)',
+    supplier: 'Kigali Poultry Suppliers Ltd',
+    status: 'Available',
+    notes: 'Grade A Whole Fresh Chicken'
+  },
+  {
+    id: 'ing-102',
+    code: 'RAW-02',
+    name: 'White Basmati Rice',
+    category: 'Grains & Rice',
+    stockQuantity: 80,
+    unit: 'Kg',
+    purchaseUnit: 'Kg',
+    recipeUnit: 'g',
+    conversionRate: 1000,
+    costPerUnit: 1800,
+    averageCost: 1750,
+    minStockAlert: 15,
+    maxStock: 200,
+    storageLocation: 'Kitchen Dry Store #2',
+    supplier: 'Bakhresa Grain Millers',
+    status: 'Available',
+    notes: 'Premium long grain rice'
+  },
+  {
+    id: 'ing-103',
+    code: 'RAW-03',
+    name: 'Vegetable Cooking Oil',
+    category: 'Spices & Oils',
+    stockQuantity: 30,
+    unit: 'Litre',
+    purchaseUnit: 'Litre',
+    recipeUnit: 'ml',
+    conversionRate: 1000,
+    costPerUnit: 2500,
+    averageCost: 2400,
+    minStockAlert: 5,
+    maxStock: 80,
+    storageLocation: 'Kitchen Pantry Shelf A',
+    supplier: 'Mount Meru Oils',
+    status: 'Available'
+  },
+  {
+    id: 'ing-104',
+    code: 'RAW-04',
+    name: 'Fresh Tomatoes',
+    category: 'Vegetables & Produce',
+    stockQuantity: 18,
+    unit: 'Kg',
+    purchaseUnit: 'Kg',
+    recipeUnit: 'g',
+    conversionRate: 1000,
+    costPerUnit: 1200,
+    averageCost: 1100,
+    minStockAlert: 8,
+    maxStock: 50,
+    storageLocation: 'Vegetable Cold Chiller',
+    supplier: 'Nyabugogo Fresh Market',
+    status: 'Available'
+  },
+  {
+    id: 'ing-105',
+    code: 'RAW-05',
+    name: 'Beef Fillet Meat',
+    category: 'Meat & Poultry',
+    stockQuantity: 25,
+    unit: 'Kg',
+    purchaseUnit: 'Kg',
+    recipeUnit: 'g',
+    conversionRate: 1000,
+    costPerUnit: 4800,
+    averageCost: 4600,
+    minStockAlert: 8,
+    maxStock: 60,
+    storageLocation: 'Cold Room #1 (Meat)',
+    supplier: 'Nyabugogo Abattoir',
+    status: 'Available'
+  },
+  {
+    id: 'ing-106',
+    code: 'RAW-06',
+    name: 'Fresh Eggs',
+    category: 'Dairy & Eggs',
+    stockQuantity: 5,
+    unit: 'Tray',
+    purchaseUnit: 'Tray',
+    recipeUnit: 'Piece',
+    conversionRate: 30,
+    costPerUnit: 4200,
+    averageCost: 4000,
+    minStockAlert: 3,
+    maxStock: 20,
+    storageLocation: 'Pantry Rack 3',
+    supplier: 'Bugesera Poultry Farm',
+    status: 'Available'
   }
 ];
 
