@@ -398,12 +398,18 @@ export async function pullAllFromSupabase(): Promise<{ success: boolean; count: 
           if (rawLocal) localData = JSON.parse(rawLocal);
         } catch (e) {}
 
-        if (Array.isArray(row.data) && Array.isArray(localData)) {
-          const merged = mergeArraysByKey(localData, row.data);
-          const mergedStr = JSON.stringify(merged);
-          const currentStr = JSON.stringify(localData);
+        if (Array.isArray(row.data)) {
+          const isLocalEmpty = !localData || !Array.isArray(localData) || localData.length === 0;
+          if (row.data.length === 0 && isLocalEmpty) {
+            return;
+          }
 
-          if (mergedStr !== currentStr) {
+          const currentLocalArray = Array.isArray(localData) ? localData : [];
+          const merged = mergeArraysByKey(currentLocalArray, row.data);
+          const mergedStr = JSON.stringify(merged);
+          const currentStr = JSON.stringify(currentLocalArray);
+
+          if (mergedStr !== currentStr && merged.length > 0) {
             localStorage.setItem(localKey, mergedStr);
             updatedCount++;
           }
@@ -420,7 +426,7 @@ export async function pullAllFromSupabase(): Promise<{ success: boolean; count: 
           }
         } else {
           const incomingStr = JSON.stringify(row.data);
-          if (incomingStr !== rawLocal) {
+          if (incomingStr !== rawLocal && incomingStr !== '[]' && incomingStr !== 'null') {
             localStorage.setItem(localKey, incomingStr);
             updatedCount++;
           }

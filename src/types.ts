@@ -153,6 +153,8 @@ export interface StockMovementRecord {
   department: string; // e.g., 'Restaurant POS', 'Bar POS', 'Room Service', 'Kitchen', 'Main Store'
   reason?: string;
   notes?: string;
+  shiftId?: string;
+  businessDate?: string;
 }
 
 export type WasteType = 
@@ -180,6 +182,8 @@ export interface KitchenWasteRecord {
   reason: string;
   department: string;
   notes?: string;
+  shiftId?: string;
+  businessDate?: string;
 }
 
 export interface MenuItem {
@@ -258,6 +262,8 @@ export interface KitchenTicket {
   }[];
   orderTime: string; // ISO string
   status: KitchenTicketStatus;
+  shiftId?: string;
+  businessDate?: string;
   specialNotes?: string;
   orderType?: string;
   ticketType?: 'NEW ORDER' | 'UPDATED ORDER' | 'CANCELLED ITEM';
@@ -351,6 +357,7 @@ export interface Order {
   createdAt: string; // ISO
   paidAt?: string; // ISO
   shiftId: string;
+  businessDate?: string;
   cashierName: string;
   kotGenerated?: boolean;
   kotId?: string;
@@ -398,18 +405,49 @@ export interface PurchaseOrder {
   notes?: string;
 }
 
+export interface ShiftSummary {
+  totalSales: number;
+  cashSales: number;
+  cardSales: number;
+  mobileMoneySales: number;
+  creditSales: number;
+  discountsTotal: number;
+  taxesTotal: number;
+  serviceChargesTotal: number;
+  expensesTotal: number;
+  openingCash: number;
+  expectedCash: number;
+  actualCash: number;
+  difference: number;
+  totalOrdersCount: number;
+  cancelledOrdersCount: number;
+  voidedOrdersCount: number;
+  kitchenOrdersCount: number;
+  inventoryConsumptionCost: number;
+  estimatedProfit: number;
+}
+
 export interface Shift {
-  id: string;
-  cashierName: string;
+  id: string; // e.g. "sh-250"
+  shiftNumber: number; // e.g. 250
+  businessDate: string; // YYYY-MM-DD or e.g. "10 August 2026"
+  cashierName: string; // Compatible with legacy
   cashierId: string;
-  openedAt: string;
-  closedAt?: string;
+  openedAt: string; // ISO timestamp
+  closedAt?: string; // ISO timestamp
+  openedBy: string; // User who opened shift
+  openedById?: string;
+  closedBy?: string; // User who closed shift
+  closedById?: string;
+  reopenedAt?: string;
+  reopenedBy?: string;
   openingCash: number;
   closingCashExpected?: number;
   closingCashActual?: number;
   difference?: number; // Actual - Expected
   status: 'Open' | 'Closed';
   notes?: string;
+  summary?: ShiftSummary;
 }
 
 export interface DailyReportData {

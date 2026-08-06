@@ -138,13 +138,21 @@ export async function pullServerState(): Promise<boolean> {
           const lastWrite = lastLocalWriteTimestamps[serverKey] || 0;
           const isRecentLocalWrite = (Date.now() - lastWrite) < 10000;
 
-          if (Array.isArray(incoming) && Array.isArray(localData)) {
-            const merged = mergeArraysByKey(localData, incoming);
+          if (Array.isArray(incoming)) {
+            // Prevent wiping out local data or initial seed data when server array is empty
+            const isLocalEmpty = !localData || !Array.isArray(localData) || localData.length === 0;
+            if (incoming.length === 0 && isLocalEmpty) {
+              // Skip overwriting localStorage with "[]" when both are empty
+              return;
+            }
+
+            const currentLocalArray = Array.isArray(localData) ? localData : [];
+            const merged = mergeArraysByKey(currentLocalArray, incoming);
             const mergedStr = JSON.stringify(merged);
-            const currentStr = JSON.stringify(localData);
+            const currentStr = JSON.stringify(currentLocalArray);
             const incomingStr = JSON.stringify(incoming);
 
-            if (mergedStr !== currentStr) {
+            if (mergedStr !== currentStr && merged.length > 0) {
               localStorage.setItem(localKey, mergedStr);
               hasChanges = true;
             }
@@ -155,7 +163,7 @@ export async function pullServerState(): Promise<boolean> {
             }
           } else {
             const incomingStr = JSON.stringify(incoming);
-            if (incomingStr !== rawLocal && !isRecentLocalWrite) {
+            if (incomingStr !== rawLocal && !isRecentLocalWrite && incomingStr !== '[]' && incomingStr !== 'null') {
               localStorage.setItem(localKey, incomingStr);
               hasChanges = true;
             }

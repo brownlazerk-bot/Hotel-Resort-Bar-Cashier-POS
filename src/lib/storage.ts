@@ -456,16 +456,14 @@ export function savePurchaseOrders(pos: PurchaseOrder[]): void {
 // Kitchen Ingredients Storage
 export function loadIngredients(): KitchenIngredient[] {
   const raw = localStorage.getItem(KEYS.KITCHEN_INGREDIENTS);
-  if (raw === null) {
-    localStorage.setItem('hotel_ingredients_init_done', 'true');
+  if (raw === null || raw === '[]' || raw === 'null') {
     saveIngredients(INITIAL_KITCHEN_INGREDIENTS);
     return INITIAL_KITCHEN_INGREDIENTS;
   }
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      if (parsed.length === 0 && !localStorage.getItem('hotel_ingredients_init_done')) {
-        localStorage.setItem('hotel_ingredients_init_done', 'true');
+      if (parsed.length === 0) {
         saveIngredients(INITIAL_KITCHEN_INGREDIENTS);
         return INITIAL_KITCHEN_INGREDIENTS;
       }
