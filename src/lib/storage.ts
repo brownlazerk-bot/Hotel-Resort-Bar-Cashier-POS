@@ -462,17 +462,28 @@ export function savePurchaseOrders(pos: PurchaseOrder[]): void {
 export function loadIngredients(): KitchenIngredient[] {
   const raw = localStorage.getItem(KEYS.KITCHEN_INGREDIENTS);
   if (raw === null) {
+    localStorage.setItem('hotel_ingredients_init_done', 'true');
     saveIngredients(INITIAL_KITCHEN_INGREDIENTS);
     return INITIAL_KITCHEN_INGREDIENTS;
   }
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0 && !localStorage.getItem('hotel_ingredients_init_done')) {
+        localStorage.setItem('hotel_ingredients_init_done', 'true');
+        saveIngredients(INITIAL_KITCHEN_INGREDIENTS);
+        return INITIAL_KITCHEN_INGREDIENTS;
+      }
+      return parsed;
+    }
+    return INITIAL_KITCHEN_INGREDIENTS;
   } catch (err) {
     return INITIAL_KITCHEN_INGREDIENTS;
   }
 }
 
 export function saveIngredients(ingredients: KitchenIngredient[]): void {
+  localStorage.setItem('hotel_ingredients_init_done', 'true');
   setStorage(KEYS.KITCHEN_INGREDIENTS, ingredients);
 }
 

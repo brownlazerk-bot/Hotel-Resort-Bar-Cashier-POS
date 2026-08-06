@@ -222,8 +222,24 @@ export async function pullAllFromSupabase(): Promise<{ success: boolean; count: 
         const incomingStr = JSON.stringify(row.data);
         const currentStr = localStorage.getItem(localKey);
         if (incomingStr !== currentStr) {
-          localStorage.setItem(localKey, incomingStr);
-          updatedCount++;
+          const isIncomingEmptyArray = Array.isArray(row.data) && row.data.length === 0;
+          const hasLocalData = currentStr && currentStr !== '[]' && currentStr !== 'null';
+
+          if (isIncomingEmptyArray && hasLocalData) {
+            try {
+              const parsedLocal = JSON.parse(currentStr);
+              Promise.resolve(
+                client.from('hotel_store').upsert([{
+                  key: row.key,
+                  data: parsedLocal,
+                  updated_at: new Date().toISOString()
+                }], { onConflict: 'key' })
+              ).catch(() => {});
+            } catch (e) {}
+          } else {
+            localStorage.setItem(localKey, incomingStr);
+            updatedCount++;
+          }
         }
       }
     });

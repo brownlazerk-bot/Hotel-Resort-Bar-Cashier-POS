@@ -75,8 +75,21 @@ export async function pullServerState(): Promise<boolean> {
           const incomingStr = JSON.stringify(data[serverKey]);
           const currentStr = localStorage.getItem(localKey);
           if (incomingStr !== currentStr) {
-            localStorage.setItem(localKey, incomingStr);
-            hasChanges = true;
+            const isIncomingEmptyArray = Array.isArray(data[serverKey]) && data[serverKey].length === 0;
+            const hasLocalData = currentStr && currentStr !== '[]' && currentStr !== 'null';
+
+            if (isIncomingEmptyArray && hasLocalData) {
+              // Server key is empty array but local storage has data -> push local data to server
+              try {
+                const parsedLocal = JSON.parse(currentStr);
+                pushKeyToServer(serverKey, parsedLocal);
+              } catch (e) {
+                // Ignore parse error
+              }
+            } else {
+              localStorage.setItem(localKey, incomingStr);
+              hasChanges = true;
+            }
           }
         }
       });
