@@ -9,6 +9,56 @@ import { notifyDataChange } from './syncEngine';
 
 const API_BASE = '/api/sync';
 
+// Track recent local writes to prevent race condition overwrites
+const lastLocalWriteTimestamps: Record<string, number> = {};
+
+export function recordLocalWrite(serverKey: string): void {
+  lastLocalWriteTimestamps[serverKey] = Date.now();
+}
+
+/**
+ * Smartly merges local and incoming arrays by item ID to guarantee no newly created local records are lost.
+ */
+export function mergeArraysByKey(localData: any, incomingData: any): any {
+  if (Array.isArray(localData) && Array.isArray(incomingData)) {
+    if (localData.length === 0) return incomingData;
+    if (incomingData.length === 0) return localData;
+
+    const hasId = localData.some(i => i && typeof i === 'object' && i.id);
+    if (!hasId) return incomingData;
+
+    const map = new Map<string, any>();
+
+    // Add incoming remote items first
+    incomingData.forEach((item: any) => {
+      if (item && typeof item === 'object' && item.id) {
+        map.set(item.id, item);
+      }
+    });
+
+    // Add or merge local items
+    localData.forEach((item: any) => {
+      if (item && typeof item === 'object' && item.id) {
+        const existing = map.get(item.id);
+        if (!existing) {
+          // Local item exists that remote doesn't have yet -> keep it!
+          map.set(item.id, item);
+        } else {
+          // Compare timestamps if available
+          const localTime = new Date(item.updatedAt || item.lastRestocked || item.createdAt || 0).getTime();
+          const existingTime = new Date(existing.updatedAt || existing.lastRestocked || existing.createdAt || 0).getTime();
+          if (localTime >= existingTime) {
+            map.set(item.id, { ...existing, ...item });
+          }
+        }
+      }
+    });
+
+    return Array.from(map.values());
+  }
+  return incomingData;
+}
+
 // Entity keys mapping to backend store
 export const ENTITY_KEYS = {
   MENU_ITEMS: 'menuItems',
@@ -29,7 +79,10 @@ export const ENTITY_KEYS = {
   INGREDIENTS: 'ingredients',
   RECIPES: 'recipes',
   STOCK_MOVEMENTS: 'stockMovements',
-  WASTE_RECORDS: 'wasteRecords'
+  WASTE_RECORDS: 'wasteRecords',
+  CATEGORIES: 'categories',
+  INVENTORY_ITEMS: 'inventoryItems',
+  BUSINESSES: 'businesses'
 };
 
 const LOCAL_KEY_MAP: Record<string, string> = {
@@ -51,7 +104,10 @@ const LOCAL_KEY_MAP: Record<string, string> = {
   ingredients: 'hotel_kitchen_ingredients_prod',
   recipes: 'hotel_recipes_prod',
   stockMovements: 'hotel_stock_movement_records_prod',
-  wasteRecords: 'hotel_kitchen_waste_records_prod'
+  wasteRecords: 'hotel_kitchen_waste_records_prod',
+  categories: 'hotel_categories_prod',
+  inventoryItems: 'hotel_inventory_items_prod',
+  businesses: 'hotel_businesses_prod'
 };
 
 let isSyncing = false;
@@ -71,22 +127,35 @@ export async function pullServerState(): Promise<boolean> {
       let hasChanges = false;
 
       Object.entries(LOCAL_KEY_MAP).forEach(([serverKey, localKey]) => {
-        if (data[serverKey] !== undefined) {
-          const incomingStr = JSON.stringify(data[serverKey]);
-          const currentStr = localStorage.getItem(localKey);
-          if (incomingStr !== currentStr) {
-            const isIncomingEmptyArray = Array.isArray(data[serverKey]) && data[serverKey].length === 0;
-            const hasLocalData = currentStr && currentStr !== '[]' && currentStr !== 'null';
+        const incoming = data[serverKey];
+        if (incoming !== undefined) {
+          const rawLocal = localStorage.getItem(localKey);
+          let localData: any = null;
+          try {
+            if (rawLocal) localData = JSON.parse(rawLocal);
+          } catch (e) {}
 
-            if (isIncomingEmptyArray && hasLocalData) {
-              // Server key is empty array but local storage has data -> push local data to server
-              try {
-                const parsedLocal = JSON.parse(currentStr);
-                pushKeyToServer(serverKey, parsedLocal);
-              } catch (e) {
-                // Ignore parse error
-              }
-            } else {
+          const lastWrite = lastLocalWriteTimestamps[serverKey] || 0;
+          const isRecentLocalWrite = (Date.now() - lastWrite) < 10000;
+
+          if (Array.isArray(incoming) && Array.isArray(localData)) {
+            const merged = mergeArraysByKey(localData, incoming);
+            const mergedStr = JSON.stringify(merged);
+            const currentStr = JSON.stringify(localData);
+            const incomingStr = JSON.stringify(incoming);
+
+            if (mergedStr !== currentStr) {
+              localStorage.setItem(localKey, mergedStr);
+              hasChanges = true;
+            }
+
+            // If local had items that remote was missing, push merged list back to server!
+            if (merged.length > incoming.length || (isRecentLocalWrite && mergedStr !== incomingStr)) {
+              pushKeyToServer(serverKey, merged);
+            }
+          } else {
+            const incomingStr = JSON.stringify(incoming);
+            if (incomingStr !== rawLocal && !isRecentLocalWrite) {
               localStorage.setItem(localKey, incomingStr);
               hasChanges = true;
             }
@@ -111,6 +180,7 @@ export async function pullServerState(): Promise<boolean> {
  * Push a single entity key update to the central Express server.
  */
 export async function pushKeyToServer(entityKey: string, value: any): Promise<void> {
+  recordLocalWrite(entityKey);
   try {
     await fetch(`${API_BASE}/key`, {
       method: 'POST',

@@ -54,6 +54,9 @@ const KEYS = {
   NOTIFICATION_RULES: 'hotel_notification_rules_prod',
   APPROVAL_RULES: 'hotel_approval_rules_prod',
   APPROVAL_REQUESTS: 'hotel_approval_requests_prod',
+  CATEGORIES: 'hotel_categories_prod',
+  INVENTORY_ITEMS: 'hotel_inventory_items_prod',
+  BUSINESSES: 'hotel_businesses_prod',
 };
 
 export const SUPER_ADMIN_CREDENTIALS: AppUser = {
@@ -105,7 +108,7 @@ function getStorage<T>(key: string, defaultValue: T): T {
 }
 
 import { notifyDataChange } from './syncEngine';
-import { pushKeyToServer } from './serverSync';
+import { pushKeyToServer, recordLocalWrite } from './serverSync';
 import { getSupabaseClient } from './supabaseSync';
 
 const LOCAL_TO_SERVER_KEY: Record<string, string> = {
@@ -136,7 +139,10 @@ const LOCAL_TO_SERVER_KEY: Record<string, string> = {
   [KEYS.NOTIFICATION_ITEMS]: 'notifications',
   [KEYS.NOTIFICATION_RULES]: 'notificationRules',
   [KEYS.APPROVAL_RULES]: 'approvalRules',
-  [KEYS.APPROVAL_REQUESTS]: 'approvalRequests'
+  [KEYS.APPROVAL_REQUESTS]: 'approvalRequests',
+  [KEYS.CATEGORIES]: 'categories',
+  [KEYS.INVENTORY_ITEMS]: 'inventoryItems',
+  [KEYS.BUSINESSES]: 'businesses'
 };
 
 function setStorage<T>(key: string, value: T): void {
@@ -147,6 +153,7 @@ function setStorage<T>(key: string, value: T): void {
     // Asynchronously push to central Express backend server for cross-device sync (HP, Dell, Phone)
     const serverKey = LOCAL_TO_SERVER_KEY[key];
     if (serverKey) {
+      recordLocalWrite(serverKey);
       pushKeyToServer(serverKey, value);
 
       // Also auto-push to Supabase Cloud if configured

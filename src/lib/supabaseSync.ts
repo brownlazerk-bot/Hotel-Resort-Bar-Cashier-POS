@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { notifyDataChange } from './syncEngine';
+import { mergeArraysByKey } from './serverSync';
 
 export interface SupabaseConfig {
   url: string;
@@ -28,7 +29,10 @@ const LOCAL_KEY_MAP: Record<string, string> = {
   ingredients: 'hotel_kitchen_ingredients_prod',
   recipes: 'hotel_recipes_prod',
   stockMovements: 'hotel_stock_movement_records_prod',
-  wasteRecords: 'hotel_kitchen_waste_records_prod'
+  wasteRecords: 'hotel_kitchen_waste_records_prod',
+  categories: 'hotel_categories_prod',
+  inventoryItems: 'hotel_inventory_items_prod',
+  businesses: 'hotel_businesses_prod'
 };
 
 export function getSupabaseConfig(): SupabaseConfig {
@@ -388,24 +392,35 @@ export async function pullAllFromSupabase(): Promise<{ success: boolean; count: 
     data.forEach((row: { key: string; data: any }) => {
       const localKey = LOCAL_KEY_MAP[row.key];
       if (localKey && row.data !== undefined) {
-        const incomingStr = JSON.stringify(row.data);
-        const currentStr = localStorage.getItem(localKey);
-        if (incomingStr !== currentStr) {
-          const isIncomingEmptyArray = Array.isArray(row.data) && row.data.length === 0;
-          const hasLocalData = currentStr && currentStr !== '[]' && currentStr !== 'null';
+        const rawLocal = localStorage.getItem(localKey);
+        let localData: any = null;
+        try {
+          if (rawLocal) localData = JSON.parse(rawLocal);
+        } catch (e) {}
 
-          if (isIncomingEmptyArray && hasLocalData) {
-            try {
-              const parsedLocal = JSON.parse(currentStr);
-              Promise.resolve(
-                client.from('hotel_store').upsert([{
-                  key: row.key,
-                  data: parsedLocal,
-                  updated_at: new Date().toISOString()
-                }], { onConflict: 'key' })
-              ).catch(() => {});
-            } catch (e) {}
-          } else {
+        if (Array.isArray(row.data) && Array.isArray(localData)) {
+          const merged = mergeArraysByKey(localData, row.data);
+          const mergedStr = JSON.stringify(merged);
+          const currentStr = JSON.stringify(localData);
+
+          if (mergedStr !== currentStr) {
+            localStorage.setItem(localKey, mergedStr);
+            updatedCount++;
+          }
+
+          // If local had items Supabase was missing, push merged data to Supabase
+          if (merged.length > row.data.length) {
+            Promise.resolve(
+              client.from('hotel_store').upsert([{
+                key: row.key,
+                data: merged,
+                updated_at: new Date().toISOString()
+              }], { onConflict: 'key' })
+            ).catch(() => {});
+          }
+        } else {
+          const incomingStr = JSON.stringify(row.data);
+          if (incomingStr !== rawLocal) {
             localStorage.setItem(localKey, incomingStr);
             updatedCount++;
           }

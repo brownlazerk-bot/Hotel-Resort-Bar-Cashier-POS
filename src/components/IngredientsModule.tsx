@@ -198,6 +198,10 @@ export const IngredientsModule: React.FC<IngredientsModuleProps> = ({
       onSaveIngredients([newIng, ...ingredients]);
     }
 
+    // Reset active filters so user immediately sees newly added/edited ingredient
+    setSearchTerm('');
+    setSelectedCategory('All');
+    setSelectedStatus('All');
     setShowAddEditModal(false);
   };
 
