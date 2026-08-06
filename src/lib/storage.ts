@@ -2,13 +2,26 @@ import {
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, AppUser, AuditLog,
   Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient,
-  StockMovementRecord, KitchenWasteRecord, Recipe
+  StockMovementRecord, KitchenWasteRecord, Recipe,
+  WhatsAppSettings, WhatsAppRecipient, ReportDeliveryRule, ReportDeliveryHistory,
+  MessageTemplate, NotificationItem, NotificationRule, ApprovalRule, ApprovalRequest
 } from '../types';
 import { 
   INITIAL_MENU_ITEMS, INITIAL_TABLES, INITIAL_WAITERS, 
   INITIAL_GUEST_ROOMS, INITIAL_ORDERS, INITIAL_KITCHEN_TICKETS,
   INITIAL_PURCHASE_ORDERS, INITIAL_KITCHEN_INGREDIENTS
 } from '../data/mockData';
+import {
+  INITIAL_WHATSAPP_SETTINGS,
+  INITIAL_WHATSAPP_RECIPIENTS,
+  INITIAL_REPORT_RULES,
+  INITIAL_REPORT_HISTORY,
+  INITIAL_MESSAGE_TEMPLATES,
+  INITIAL_NOTIFICATION_RULES,
+  INITIAL_NOTIFICATIONS,
+  INITIAL_APPROVAL_RULES,
+  INITIAL_APPROVAL_REQUESTS
+} from '../data/mockAutomationData';
 
 const KEYS = {
   PROD_INIT: 'hotel_prod_v1_init',
@@ -32,6 +45,15 @@ const KEYS = {
   STOCK_MOVEMENT_RECORDS: 'hotel_stock_movement_records_prod',
   KITCHEN_WASTE_RECORDS: 'hotel_kitchen_waste_records_prod',
   RECIPES: 'hotel_recipes_prod',
+  WHATSAPP_SETTINGS: 'hotel_whatsapp_settings_prod',
+  WHATSAPP_RECIPIENTS: 'hotel_whatsapp_recipients_prod',
+  REPORT_DELIVERY_RULES: 'hotel_report_delivery_rules_prod',
+  REPORT_DELIVERY_HISTORY: 'hotel_report_delivery_history_prod',
+  MESSAGE_TEMPLATES: 'hotel_message_templates_prod',
+  NOTIFICATION_ITEMS: 'hotel_notification_items_prod',
+  NOTIFICATION_RULES: 'hotel_notification_rules_prod',
+  APPROVAL_RULES: 'hotel_approval_rules_prod',
+  APPROVAL_REQUESTS: 'hotel_approval_requests_prod',
 };
 
 export const SUPER_ADMIN_CREDENTIALS: AppUser = {
@@ -117,7 +139,16 @@ const LOCAL_TO_SERVER_KEY: Record<string, string> = {
   [KEYS.KITCHEN_INGREDIENTS]: 'ingredients',
   [KEYS.RECIPES]: 'recipes',
   [KEYS.STOCK_MOVEMENT_RECORDS]: 'stockMovements',
-  [KEYS.KITCHEN_WASTE_RECORDS]: 'wasteRecords'
+  [KEYS.KITCHEN_WASTE_RECORDS]: 'wasteRecords',
+  [KEYS.WHATSAPP_SETTINGS]: 'whatsappSettings',
+  [KEYS.WHATSAPP_RECIPIENTS]: 'whatsappRecipients',
+  [KEYS.REPORT_DELIVERY_RULES]: 'reportRules',
+  [KEYS.REPORT_DELIVERY_HISTORY]: 'reportHistory',
+  [KEYS.MESSAGE_TEMPLATES]: 'messageTemplates',
+  [KEYS.NOTIFICATION_ITEMS]: 'notifications',
+  [KEYS.NOTIFICATION_RULES]: 'notificationRules',
+  [KEYS.APPROVAL_RULES]: 'approvalRules',
+  [KEYS.APPROVAL_REQUESTS]: 'approvalRequests'
 };
 
 function setStorage<T>(key: string, value: T): void {
@@ -500,6 +531,125 @@ export function loadRecipes(): Recipe[] {
 
 export function saveRecipes(recipes: Recipe[]): void {
   setStorage(KEYS.RECIPES, recipes);
+}
+
+// WhatsApp Settings Storage
+export function loadWhatsAppSettings(): WhatsAppSettings {
+  return getStorage<WhatsAppSettings>(KEYS.WHATSAPP_SETTINGS, INITIAL_WHATSAPP_SETTINGS);
+}
+
+export function saveWhatsAppSettings(settings: WhatsAppSettings): void {
+  setStorage(KEYS.WHATSAPP_SETTINGS, settings);
+}
+
+// WhatsApp Recipients Storage
+export function loadWhatsAppRecipients(): WhatsAppRecipient[] {
+  return getStorage<WhatsAppRecipient[]>(KEYS.WHATSAPP_RECIPIENTS, INITIAL_WHATSAPP_RECIPIENTS);
+}
+
+export function saveWhatsAppRecipients(recipients: WhatsAppRecipient[]): void {
+  setStorage(KEYS.WHATSAPP_RECIPIENTS, recipients);
+}
+
+// Report Delivery Rules Storage
+export function loadReportRules(): ReportDeliveryRule[] {
+  return getStorage<ReportDeliveryRule[]>(KEYS.REPORT_DELIVERY_RULES, INITIAL_REPORT_RULES);
+}
+
+export function saveReportRules(rules: ReportDeliveryRule[]): void {
+  setStorage(KEYS.REPORT_DELIVERY_RULES, rules);
+}
+
+// Report Delivery History Storage
+export function loadReportHistory(): ReportDeliveryHistory[] {
+  return getStorage<ReportDeliveryHistory[]>(KEYS.REPORT_DELIVERY_HISTORY, INITIAL_REPORT_HISTORY);
+}
+
+export function saveReportHistory(history: ReportDeliveryHistory[]): void {
+  setStorage(KEYS.REPORT_DELIVERY_HISTORY, history);
+}
+
+export function addReportHistoryRecord(record: Omit<ReportDeliveryHistory, 'id' | 'createdAt'>): ReportDeliveryHistory {
+  const history = loadReportHistory();
+  const created: ReportDeliveryHistory = {
+    ...record,
+    id: `HIST-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    createdAt: new Date().toISOString()
+  };
+  saveReportHistory([created, ...history]);
+  return created;
+}
+
+// Message Templates Storage
+export function loadMessageTemplates(): MessageTemplate[] {
+  return getStorage<MessageTemplate[]>(KEYS.MESSAGE_TEMPLATES, INITIAL_MESSAGE_TEMPLATES);
+}
+
+export function saveMessageTemplates(templates: MessageTemplate[]): void {
+  setStorage(KEYS.MESSAGE_TEMPLATES, templates);
+}
+
+// Real-Time Notifications Storage
+export function loadNotifications(): NotificationItem[] {
+  return getStorage<NotificationItem[]>(KEYS.NOTIFICATION_ITEMS, INITIAL_NOTIFICATIONS);
+}
+
+export function saveNotifications(notifications: NotificationItem[]): void {
+  setStorage(KEYS.NOTIFICATION_ITEMS, notifications);
+}
+
+export function addNotificationItem(item: Omit<NotificationItem, 'id' | 'createdAt'>): NotificationItem {
+  const items = loadNotifications();
+  const created: NotificationItem = {
+    ...item,
+    id: `NOTIF-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    createdAt: new Date().toISOString()
+  };
+  saveNotifications([created, ...items]);
+  return created;
+}
+
+// Notification Rules Storage
+export function loadNotificationRules(): NotificationRule[] {
+  return getStorage<NotificationRule[]>(KEYS.NOTIFICATION_RULES, INITIAL_NOTIFICATION_RULES);
+}
+
+export function saveNotificationRules(rules: NotificationRule[]): void {
+  setStorage(KEYS.NOTIFICATION_RULES, rules);
+}
+
+// Approval Rules Storage
+export function loadApprovalRules(): ApprovalRule[] {
+  return getStorage<ApprovalRule[]>(KEYS.APPROVAL_RULES, INITIAL_APPROVAL_RULES);
+}
+
+export function saveApprovalRules(rules: ApprovalRule[]): void {
+  setStorage(KEYS.APPROVAL_RULES, rules);
+}
+
+// Approval Requests Storage
+export function loadApprovalRequests(): ApprovalRequest[] {
+  return getStorage<ApprovalRequest[]>(KEYS.APPROVAL_REQUESTS, INITIAL_APPROVAL_REQUESTS);
+}
+
+export function saveApprovalRequests(requests: ApprovalRequest[]): void {
+  setStorage(KEYS.APPROVAL_REQUESTS, requests);
+}
+
+export function addApprovalRequestRecord(req: Omit<ApprovalRequest, 'id' | 'createdAt' | 'updatedAt' | 'referenceNo'>): ApprovalRequest {
+  const requests = loadApprovalRequests();
+  const count = requests.length + 1;
+  const ref = `APR-${new Date().getFullYear()}-${String(count).padStart(3, '0')}`;
+  const now = new Date().toISOString();
+  const created: ApprovalRequest = {
+    ...req,
+    id: `APR-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    referenceNo: ref,
+    createdAt: now,
+    updatedAt: now
+  };
+  saveApprovalRequests([created, ...requests]);
+  return created;
 }
 
 export function resetAllDataToDefault(): void {

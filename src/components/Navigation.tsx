@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, Receipt, ShoppingCart, UtensilsCrossed, ChefHat, 
   Waves, PackageCheck, ReceiptText, FileBarChart, Settings, Users, ShieldCheck,
-  Package, Boxes, Utensils, BookOpen
+  Package, Boxes, Utensils, BookOpen, MessageSquare, Bell, CheckSquare
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { Language, getTranslation } from '../lib/translations';
@@ -20,6 +20,9 @@ export type TabType =
   | 'stock' 
   | 'shifts' 
   | 'report' 
+  | 'whatsapp_reports'
+  | 'notifications'
+  | 'approvals'
   | 'products_services'
   | 'users'
   | 'audit_logs'
@@ -80,6 +83,9 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     { id: 'shifts' as TabType, label: t.shifts, icon: ReceiptText },
     { id: 'report' as TabType, label: t.dailyReport, icon: FileBarChart },
+    { id: 'whatsapp_reports' as TabType, label: 'WhatsApp Automation', icon: MessageSquare, managerOnly: true },
+    { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
+    { id: 'approvals' as TabType, label: 'Approvals Engine', icon: CheckSquare },
     { id: 'products_services' as TabType, label: t.productsServices, icon: Package, managerOnly: true },
     { id: 'users' as TabType, label: t.userAdmin, icon: Users, managerOnly: true },
     { id: 'audit_logs' as TabType, label: t.auditLogs, icon: ShieldCheck, managerOnly: true },

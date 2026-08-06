@@ -567,8 +567,245 @@ export interface AuditLog {
   userRole: string;
   userEmail: string;
   action: string;
-  category: 'Auth' | 'User Management' | 'Inventory' | 'Sales' | 'System' | 'Reports' | 'Tables';
+  category: 'Auth' | 'User Management' | 'Inventory' | 'Sales' | 'System' | 'Reports' | 'Tables' | 'Approvals' | 'WhatsApp' | 'Notifications';
   details: string;
   timestamp: string;
   ipAddress?: string;
 }
+
+// ==========================================
+// WHATSAPP & REPORT AUTOMATION TYPES
+// ==========================================
+
+export interface WhatsAppSettings {
+  apiUrl: string;
+  accessToken: string;
+  phoneNumberId: string;
+  businessAccountId?: string;
+  webhookVerifyToken?: string;
+  enabled: boolean;
+  connected: boolean;
+  lastVerifiedAt?: string;
+  defaultSenderNumber?: string;
+}
+
+export interface WhatsAppRecipient {
+  id: string;
+  fullName: string;
+  phoneNumber: string; // e.g., +25078XXXXXXX
+  position: string; // e.g., Owner, Manager, Accountant, Kitchen Head
+  department: string; // e.g., Management, Finance, Kitchen, Bar, Housekeeping
+  active: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
+export type ReportType =
+  | 'Daily Sales Report'
+  | 'Kitchen Sales Report'
+  | 'Kitchen Inventory Report'
+  | 'Kitchen Consumption Report'
+  | 'Bar Sales Report'
+  | 'Pool Sales Report'
+  | 'Cashier Closing Report'
+  | 'Shift Report'
+  | 'Profit & Loss Report'
+  | 'Stock Movement Report'
+  | 'Low Stock Report'
+  | 'Purchase Report'
+  | 'Expense Report'
+  | 'Audit Log Report'
+  | 'Employee Attendance Report'
+  | 'Reservation Report'
+  | 'Customer Report';
+
+export type DeliveryMethod = 'WhatsApp' | 'Email' | 'SMS';
+
+export type ScheduleFrequency =
+  | 'Immediately'
+  | 'Every Hour'
+  | 'Daily'
+  | 'Weekly'
+  | 'Monthly'
+  | 'Yearly'
+  | 'Custom Cron Schedule';
+
+export type ReportFormat = 'PDF' | 'Excel' | 'CSV' | 'Image' | 'Summary Text';
+
+export interface ReportDeliveryRule {
+  id: string;
+  ruleName: string;
+  reportType: ReportType;
+  deliveryMethods: DeliveryMethod[];
+  recipientIds: string[]; // List of WhatsAppRecipient IDs
+  schedule: ScheduleFrequency;
+  time: string; // HH:mm format, e.g. "23:00"
+  daysOfWeek?: number[]; // [1..7] for Weekly
+  dayOfMonth?: number; // 1..31 for Monthly
+  customCron?: string;
+  format: ReportFormat;
+  customTemplate?: string;
+  status: 'Active' | 'Inactive';
+  lastRun?: string;
+  nextRun?: string;
+  createdAt: string;
+}
+
+export interface ReportDeliveryHistory {
+  id: string;
+  ruleId?: string;
+  reportName: string;
+  recipientName: string;
+  whatsappNumber: string;
+  deliveryMethod: DeliveryMethod;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm:ss
+  status: 'Delivered' | 'Failed' | 'Pending';
+  retryCount: number;
+  errorMessage?: string;
+  attachmentName?: string;
+  format: ReportFormat;
+  messagePreview?: string;
+  createdAt: string;
+}
+
+export interface MessageTemplate {
+  id: string;
+  name: string;
+  category: string;
+  templateText: string;
+  availableVariables: string[];
+  updatedAt: string;
+}
+
+// ==========================================
+// REAL-TIME NOTIFICATION CENTER TYPES
+// ==========================================
+
+export type NotificationChannel = 'WhatsApp' | 'Email' | 'SMS' | 'In-App' | 'Push';
+
+export type NotificationCategory =
+  | 'Sales'
+  | 'Purchases'
+  | 'Kitchen'
+  | 'Inventory'
+  | 'Hotel'
+  | 'Bar'
+  | 'Pool & Sauna'
+  | 'Cashier'
+  | 'Accounting'
+  | 'Staff'
+  | 'Security'
+  | 'Audit Logs'
+  | 'Maintenance'
+  | 'Reservations'
+  | 'Customers'
+  | 'Payments';
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  category: NotificationCategory;
+  channels: NotificationChannel[];
+  recipientName?: string;
+  recipientPhone?: string;
+  status: 'Unread' | 'Read';
+  deliveryStatus: 'Sent' | 'Failed' | 'Queued';
+  priority?: 'Low' | 'Medium' | 'High' | 'Critical';
+  createdAt: string;
+  retryCount?: number;
+  errorDetails?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface NotificationRule {
+  id: string;
+  name: string;
+  category: NotificationCategory;
+  conditionField: string; // e.g. "sale_amount", "stock_level", "expense_amount"
+  operator: '>' | '<' | '==' | '>=' | '<=' | 'contains' | 'any_event';
+  thresholdValue: string | number;
+  channels: NotificationChannel[];
+  recipientIds: string[];
+  enabled: boolean;
+  messageTemplate: string;
+  createdAt: string;
+}
+
+// ==========================================
+// APPROVAL WORKFLOW ENGINE TYPES
+// ==========================================
+
+export type ApprovalModule =
+  | 'Purchases'
+  | 'Expenses'
+  | 'Inventory Adjustments'
+  | 'Recipe Changes'
+  | 'Menu Price Changes'
+  | 'Discounts'
+  | 'Refunds'
+  | 'Order Cancellation'
+  | 'Payroll'
+  | 'Supplier Payments'
+  | 'Customer Credit'
+  | 'Cash Withdrawals'
+  | 'Cash Deposits'
+  | 'User Permissions'
+  | 'Accounting Journal Entries';
+
+export type ApprovalLevelName = 'Level 1 (Supervisor)' | 'Level 2 (Manager)' | 'Level 3 (Owner)';
+
+export interface ApprovalRule {
+  id: string;
+  ruleName: string;
+  module: ApprovalModule;
+  conditionField: string; // e.g., "amount", "discount_percent", "quantity", "price"
+  operator: '>' | '<' | '>=' | '<=' | '==' | 'any_change';
+  thresholdValue: number | string; // e.g., 1000000
+  approvalLevels: ApprovalLevelName[];
+  assignedRoles?: SystemRole[];
+  assignedUserIds?: string[];
+  enabled: boolean;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface ApprovalLevelStatus {
+  level: ApprovalLevelName;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Changes Requested';
+  approverId?: string;
+  approverName?: string;
+  approverRole?: string;
+  decisionNotes?: string;
+  decidedAt?: string;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  referenceNo: string; // e.g., APR-2026-0042
+  module: ApprovalModule;
+  title: string;
+  requestedBy: string;
+  requestedByRole: string;
+  requestedById?: string;
+  date: string;
+  time: string;
+  amount?: number;
+  reason: string;
+  details?: Record<string, any>;
+  attachments?: string[];
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Changes Requested' | 'Forwarded';
+  currentLevelIndex: number;
+  levels: ApprovalLevelStatus[];
+  history: {
+    action: string;
+    actor: string;
+    actorRole: string;
+    timestamp: string;
+    notes?: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+}
+

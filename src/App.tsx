@@ -47,6 +47,11 @@ import { ProductServiceManager } from './components/ProductServiceManager';
 import { IngredientsModule } from './components/IngredientsModule';
 import { RecipeModule } from './components/RecipeModule';
 import { MenuModule } from './components/MenuModule';
+import { WhatsAppAutomationCenter } from './components/WhatsAppAutomationCenter';
+import { NotificationCenter } from './components/NotificationCenter';
+import { ApprovalWorkflowCenter } from './components/ApprovalWorkflowCenter';
+import { InAppNotificationDrawer } from './components/InAppNotificationDrawer';
+import { ManualReportSendModal } from './components/ManualReportSendModal';
 import { subscribeToSync, createDailyBackup, flushOfflineQueue } from './lib/syncEngine';
 import { startServerSyncPolling, pullServerState } from './lib/serverSync';
 import { startSupabaseSyncPolling, pullAllFromSupabase } from './lib/supabaseSync';
@@ -82,8 +87,13 @@ export default function App() {
   const [stockMovements, setStockMovements] = useState<StockMovementRecord[]>([]);
   const [wasteRecords, setWasteRecords] = useState<KitchenWasteRecord[]>([]);
 
-  // Receipt Modal State
+  // Receipt & Notification Drawer State
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
+  const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState<boolean>(false);
+  const [manualReportModal, setManualReportModal] = useState<{ isOpen: boolean; title: string }>({
+    isOpen: false,
+    title: 'Daily Sales Report'
+  });
 
   // Helper to refresh all data states from storage
   const refreshAllStateFromStorage = () => {
@@ -1824,6 +1834,27 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'whatsapp_reports' && (
+          <WhatsAppAutomationCenter
+            loggedInUser={currentUser || undefined}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'notifications' && (
+          <NotificationCenter
+            loggedInUser={currentUser || undefined}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'approvals' && (
+          <ApprovalWorkflowCenter
+            loggedInUser={currentUser || undefined}
+            darkMode={darkMode}
+          />
+        )}
+
         {activeTab === 'products_services' && (userRole === 'Manager' || userRole === 'Super Admin') && (
           <ProductServiceManager
             menuItems={menuItems}
@@ -1867,6 +1898,22 @@ export default function App() {
           darkMode={darkMode}
         />
       )}
+
+      {/* In-App Quick Notification Drawer */}
+      <InAppNotificationDrawer
+        isOpen={isNotifDrawerOpen}
+        onClose={() => setIsNotifDrawerOpen(false)}
+        onOpenNotificationCenter={() => setActiveTab('notifications')}
+        darkMode={darkMode}
+      />
+
+      {/* Manual WhatsApp Report Modal */}
+      <ManualReportSendModal
+        isOpen={manualReportModal.isOpen}
+        onClose={() => setManualReportModal({ ...manualReportModal, isOpen: false })}
+        reportTitle={manualReportModal.title}
+        darkMode={darkMode}
+      />
 
     </div>
   );
