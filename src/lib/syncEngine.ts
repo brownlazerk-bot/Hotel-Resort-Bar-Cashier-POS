@@ -4,7 +4,7 @@
  * automatic daily backup generation, and Super Admin disaster recovery.
  */
 
-import { loadMenuItems, saveMenuItems, loadOrders, saveOrders, loadKitchenTickets, saveKitchenTickets, loadTables, saveTables, loadWaiters, saveWaiters, loadStockLogs, saveStockLogs, loadShifts, saveShifts, loadGuestRooms, saveGuestRooms, loadExpenses, saveExpenses, loadCashMovements, saveCashMovements, loadDailyClosings, saveDailyClosings, loadUsers, saveUsers, loadAuditLogs } from './storage';
+import { loadMenuItems, saveMenuItems, loadOrders, saveOrders, loadKitchenTickets, saveKitchenTickets, loadTables, saveTables, loadWaiters, saveWaiters, loadStockLogs, saveStockLogs, loadShifts, saveShifts, loadGuestRooms, saveGuestRooms, loadExpenses, saveExpenses, loadCashMovements, saveCashMovements, loadDailyClosings, saveDailyClosings, loadUsers, saveUsers, loadAuditLogs, loadIngredients, saveIngredients, loadRecipes, saveRecipes, loadPurchaseOrders, savePurchaseOrders, loadStockMovementRecords, saveStockMovementRecords, loadWasteRecords, saveWasteRecords } from './storage';
 
 const BROADCAST_CHANNEL_NAME = 'hotel_resort_sync_v1';
 const PENDING_OFFLINE_QUEUE_KEY = 'hotel_offline_pending_queue';
@@ -29,6 +29,11 @@ export interface DatabaseBackup {
     dailyClosings: any[];
     users: any[];
     auditLogs: any[];
+    ingredients?: any[];
+    recipes?: any[];
+    purchaseOrders?: any[];
+    stockMovements?: any[];
+    wasteRecords?: any[];
   };
 }
 
@@ -173,7 +178,12 @@ export function createDailyBackup(userName: string = 'System Auto-Backup'): Data
       cashMovements: loadCashMovements(),
       dailyClosings: loadDailyClosings(),
       users: loadUsers(),
-      auditLogs: loadAuditLogs()
+      auditLogs: loadAuditLogs(),
+      ingredients: loadIngredients(),
+      recipes: loadRecipes(),
+      purchaseOrders: loadPurchaseOrders(),
+      stockMovements: loadStockMovementRecords(),
+      wasteRecords: loadWasteRecords()
     }
   };
 
@@ -218,6 +228,11 @@ export function restoreBackupSnapshot(backup: DatabaseBackup): boolean {
     if (Array.isArray(backup.data.cashMovements)) saveCashMovements(backup.data.cashMovements);
     if (Array.isArray(backup.data.dailyClosings)) saveDailyClosings(backup.data.dailyClosings);
     if (Array.isArray(backup.data.users)) saveUsers(backup.data.users);
+    if (Array.isArray(backup.data.ingredients)) saveIngredients(backup.data.ingredients);
+    if (Array.isArray(backup.data.recipes)) saveRecipes(backup.data.recipes);
+    if (Array.isArray(backup.data.purchaseOrders)) savePurchaseOrders(backup.data.purchaseOrders);
+    if (Array.isArray(backup.data.stockMovements)) saveStockMovementRecords(backup.data.stockMovements);
+    if (Array.isArray(backup.data.wasteRecords)) saveWasteRecords(backup.data.wasteRecords);
 
     notifyDataChange('all');
     return true;

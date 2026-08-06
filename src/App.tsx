@@ -8,7 +8,7 @@ import {
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser,
   Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient, RecipeIngredient,
-  StockMovementRecord, KitchenWasteRecord
+  StockMovementRecord, KitchenWasteRecord, Recipe
 } from './types';
 import { 
   loadMenuItems, saveMenuItems, loadTables, saveTables, 
@@ -22,7 +22,8 @@ import {
   loadDailyClosings, saveDailyClosings, addDailyClosing,
   loadPurchaseOrders, savePurchaseOrders, loadIngredients, saveIngredients,
   loadStockMovementRecords, saveStockMovementRecords, addStockMovementRecord,
-  loadWasteRecords, saveWasteRecords, addWasteRecord
+  loadWasteRecords, saveWasteRecords, addWasteRecord,
+  loadRecipes, saveRecipes
 } from './lib/storage';
 import { convertRecipeQtyToStoreQty, calculateEffectiveRecipeQty } from './lib/unitConversion';
 
@@ -43,6 +44,9 @@ import { LoginView } from './components/LoginView';
 import { UserManagement } from './components/UserManagement';
 import { AuditLogView } from './components/AuditLogView';
 import { ProductServiceManager } from './components/ProductServiceManager';
+import { IngredientsModule } from './components/IngredientsModule';
+import { RecipeModule } from './components/RecipeModule';
+import { MenuModule } from './components/MenuModule';
 import { subscribeToSync, createDailyBackup, flushOfflineQueue } from './lib/syncEngine';
 import { startServerSyncPolling, pullServerState } from './lib/serverSync';
 import { startSupabaseSyncPolling, pullAllFromSupabase } from './lib/supabaseSync';
@@ -74,6 +78,7 @@ export default function App() {
   const [dailyClosings, setDailyClosings] = useState<DailyClosingRecord[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [ingredients, setIngredients] = useState<KitchenIngredient[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [stockMovements, setStockMovements] = useState<StockMovementRecord[]>([]);
   const [wasteRecords, setWasteRecords] = useState<KitchenWasteRecord[]>([]);
 
@@ -96,6 +101,7 @@ export default function App() {
     setDailyClosings(loadDailyClosings());
     setPurchaseOrders(loadPurchaseOrders());
     setIngredients(loadIngredients());
+    setRecipes(loadRecipes());
     setStockMovements(loadStockMovementRecords());
     setWasteRecords(loadWasteRecords());
   };
@@ -303,6 +309,11 @@ export default function App() {
 
   const handleSaveIngredients = (newIngs: KitchenIngredient[]) => {
     updateIngredientsState(newIngs);
+  };
+
+  const handleSaveRecipesList = (newRecipes: Recipe[]) => {
+    setRecipes(newRecipes);
+    saveRecipes(newRecipes);
   };
 
   const handleSaveRecipe = (menuItemId: string, recipe: RecipeIngredient[]) => {
@@ -1703,6 +1714,41 @@ export default function App() {
             kitchenTickets={kitchenTickets}
             orders={orders}
             onUpdateStatus={handleUpdateKitchenStatus}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'ingredients' && (
+          <IngredientsModule
+            ingredients={ingredients}
+            recipes={recipes}
+            stockMovements={stockMovements}
+            wasteRecords={wasteRecords}
+            onSaveIngredients={handleSaveIngredients}
+            loggedInUser={currentUser || undefined}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'recipe_management' && (
+          <RecipeModule
+            recipes={recipes}
+            ingredients={ingredients}
+            menuItems={menuItems}
+            onSaveRecipes={handleSaveRecipesList}
+            onSaveMenuItems={updateMenuItemsState}
+            loggedInUser={currentUser || undefined}
+            darkMode={darkMode}
+          />
+        )}
+
+        {activeTab === 'menu_management' && (
+          <MenuModule
+            menuItems={menuItems}
+            recipes={recipes}
+            onSaveMenuItems={updateMenuItemsState}
+            onSaveRecipes={handleSaveRecipesList}
+            loggedInUser={currentUser || undefined}
             darkMode={darkMode}
           />
         )}

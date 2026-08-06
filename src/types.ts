@@ -41,6 +41,34 @@ export interface RecipeIngredient {
   active?: boolean;
 }
 
+export interface RecipeVersionRecord {
+  version: number;
+  updatedAt: string;
+  updatedBy: string;
+  changeSummary?: string;
+  ingredients: RecipeIngredient[];
+  instructions?: string;
+  yieldServings?: number;
+}
+
+export interface Recipe {
+  id: string; // e.g. "REC-101"
+  code: string; // e.g. "REC-101"
+  name: string; // e.g. "Chicken Rice Recipe"
+  linkedMenuItemId?: string; // ID of the linked MenuItem
+  linkedMenuItemName?: string;
+  instructions?: string;
+  yieldServings: number; // default 1
+  ingredients: RecipeIngredient[];
+  status: 'Active' | 'Inactive';
+  version: number;
+  history?: RecipeVersionRecord[];
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
 export type KitchenIngredientCategory = 
   | 'Meat & Poultry' 
   | 'Grains & Rice' 
@@ -150,6 +178,8 @@ export interface MenuItem {
   foodCategory?: string;
   price: number; // Selling price (RWF)
   costPrice?: number; // Cost price (RWF)
+  tax?: number; // Tax percentage e.g. 18
+  kitchenDepartment?: string; // e.g. 'Hot Kitchen', 'Grill', 'Pastry', 'Bar'
   stockQuantity: number; // Bar Stock (active selling) or Kitchen Stock
   mainStockQuantity?: number; // Main Beverage Stock (warehouse / store)
   unit: string; // e.g. 'Bottle', 'Glass', 'Serving', 'Ticket', 'Cup', 'Shot', 'Portion', 'Pass', 'Hour', 'Service'
@@ -162,6 +192,7 @@ export interface MenuItem {
   description?: string;
   minStockAlert?: number;
   hasRecipe?: boolean;
+  recipeId?: string; // Foreign key linking to standalone Recipe
   recipe?: RecipeIngredient[];
 }
 

@@ -24,7 +24,12 @@ export const ENTITY_KEYS = {
   AUDIT_LOGS: 'auditLogs',
   EXPENSES: 'expenses',
   CASH_MOVEMENTS: 'cashMovements',
-  DAILY_CLOSINGS: 'dailyClosings'
+  DAILY_CLOSINGS: 'dailyClosings',
+  PURCHASE_ORDERS: 'purchaseOrders',
+  INGREDIENTS: 'ingredients',
+  RECIPES: 'recipes',
+  STOCK_MOVEMENTS: 'stockMovements',
+  WASTE_RECORDS: 'wasteRecords'
 };
 
 const LOCAL_KEY_MAP: Record<string, string> = {
@@ -41,7 +46,12 @@ const LOCAL_KEY_MAP: Record<string, string> = {
   auditLogs: 'hotel_audit_logs_prod',
   expenses: 'hotel_expenses_prod',
   cashMovements: 'hotel_cash_movements_prod',
-  dailyClosings: 'hotel_daily_closings_prod'
+  dailyClosings: 'hotel_daily_closings_prod',
+  purchaseOrders: 'hotel_purchase_orders_prod',
+  ingredients: 'hotel_kitchen_ingredients_prod',
+  recipes: 'hotel_recipes_prod',
+  stockMovements: 'hotel_stock_movement_records_prod',
+  wasteRecords: 'hotel_kitchen_waste_records_prod'
 };
 
 let isSyncing = false;

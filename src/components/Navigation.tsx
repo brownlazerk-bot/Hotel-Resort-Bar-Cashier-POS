@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, Receipt, ShoppingCart, UtensilsCrossed, ChefHat, 
   Waves, PackageCheck, ReceiptText, FileBarChart, Settings, Users, ShieldCheck,
-  Package
+  Package, Boxes, Utensils, BookOpen
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { Language, getTranslation } from '../lib/translations';
@@ -13,6 +13,9 @@ export type TabType =
   | 'pos' 
   | 'tables' 
   | 'kitchen' 
+  | 'ingredients'
+  | 'recipe_management'
+  | 'menu_management'
   | 'pool_sauna' 
   | 'stock' 
   | 'shifts' 
@@ -64,6 +67,9 @@ export const Navigation: React.FC<NavigationProps> = ({
       badge: pendingKitchenCount > 0 ? pendingKitchenCount : null,
       badgeColor: 'bg-rose-500 text-white'
     },
+    { id: 'ingredients' as TabType, label: 'Ingredients', icon: Boxes },
+    { id: 'recipe_management' as TabType, label: 'Recipes', icon: Utensils },
+    { id: 'menu_management' as TabType, label: 'Menu', icon: BookOpen },
     { id: 'pool_sauna' as TabType, label: t.poolSauna, icon: Waves },
     { 
       id: 'stock' as TabType, 

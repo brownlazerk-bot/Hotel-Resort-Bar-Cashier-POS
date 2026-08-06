@@ -2,7 +2,7 @@ import {
   MenuItem, Table, Waiter, Order, KitchenTicket, 
   StockAdjustmentLog, Shift, GuestRoom, AppUser, AuditLog,
   Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient,
-  StockMovementRecord, KitchenWasteRecord
+  StockMovementRecord, KitchenWasteRecord, Recipe
 } from '../types';
 import { 
   INITIAL_MENU_ITEMS, INITIAL_TABLES, INITIAL_WAITERS, 
@@ -31,6 +31,7 @@ const KEYS = {
   KITCHEN_INGREDIENTS: 'hotel_kitchen_ingredients_prod',
   STOCK_MOVEMENT_RECORDS: 'hotel_stock_movement_records_prod',
   KITCHEN_WASTE_RECORDS: 'hotel_kitchen_waste_records_prod',
+  RECIPES: 'hotel_recipes_prod',
 };
 
 export const SUPER_ADMIN_CREDENTIALS: AppUser = {
@@ -113,6 +114,10 @@ const LOCAL_TO_SERVER_KEY: Record<string, string> = {
   [KEYS.CASH_MOVEMENTS]: 'cashMovements',
   [KEYS.DAILY_CLOSINGS]: 'dailyClosings',
   [KEYS.PURCHASE_ORDERS]: 'purchaseOrders',
+  [KEYS.KITCHEN_INGREDIENTS]: 'ingredients',
+  [KEYS.RECIPES]: 'recipes',
+  [KEYS.STOCK_MOVEMENT_RECORDS]: 'stockMovements',
+  [KEYS.KITCHEN_WASTE_RECORDS]: 'wasteRecords'
 };
 
 function setStorage<T>(key: string, value: T): void {
@@ -406,12 +411,16 @@ export function addDailyClosing(record: Omit<DailyClosingRecord, 'id' | 'closedA
 
 // Purchase Orders Storage
 export function loadPurchaseOrders(): PurchaseOrder[] {
-  const stored = getStorage<PurchaseOrder[]>(KEYS.PURCHASE_ORDERS, []);
-  if (!stored || stored.length === 0) {
+  const raw = localStorage.getItem(KEYS.PURCHASE_ORDERS);
+  if (raw === null) {
     savePurchaseOrders(INITIAL_PURCHASE_ORDERS);
     return INITIAL_PURCHASE_ORDERS;
   }
-  return stored;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    return INITIAL_PURCHASE_ORDERS;
+  }
 }
 
 export function savePurchaseOrders(pos: PurchaseOrder[]): void {
@@ -420,12 +429,16 @@ export function savePurchaseOrders(pos: PurchaseOrder[]): void {
 
 // Kitchen Ingredients Storage
 export function loadIngredients(): KitchenIngredient[] {
-  const stored = getStorage<KitchenIngredient[]>(KEYS.KITCHEN_INGREDIENTS, []);
-  if (!stored || stored.length === 0) {
+  const raw = localStorage.getItem(KEYS.KITCHEN_INGREDIENTS);
+  if (raw === null) {
     saveIngredients(INITIAL_KITCHEN_INGREDIENTS);
     return INITIAL_KITCHEN_INGREDIENTS;
   }
-  return stored;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    return INITIAL_KITCHEN_INGREDIENTS;
+  }
 }
 
 export function saveIngredients(ingredients: KitchenIngredient[]): void {
@@ -478,6 +491,15 @@ export function addWasteRecord(rec: Omit<KitchenWasteRecord, 'id' | 'timestamp' 
   };
   saveWasteRecords([created, ...records]);
   return created;
+}
+
+// Recipes Storage
+export function loadRecipes(): Recipe[] {
+  return getStorage<Recipe[]>(KEYS.RECIPES, []);
+}
+
+export function saveRecipes(recipes: Recipe[]): void {
+  setStorage(KEYS.RECIPES, recipes);
 }
 
 export function resetAllDataToDefault(): void {

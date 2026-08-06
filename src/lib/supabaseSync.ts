@@ -23,7 +23,12 @@ const LOCAL_KEY_MAP: Record<string, string> = {
   auditLogs: 'hotel_audit_logs_prod',
   expenses: 'hotel_expenses_prod',
   cashMovements: 'hotel_cash_movements_prod',
-  dailyClosings: 'hotel_daily_closings_prod'
+  dailyClosings: 'hotel_daily_closings_prod',
+  purchaseOrders: 'hotel_purchase_orders_prod',
+  ingredients: 'hotel_kitchen_ingredients_prod',
+  recipes: 'hotel_recipes_prod',
+  stockMovements: 'hotel_stock_movement_records_prod',
+  wasteRecords: 'hotel_kitchen_waste_records_prod'
 };
 
 export function getSupabaseConfig(): SupabaseConfig {

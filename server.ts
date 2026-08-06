@@ -54,7 +54,12 @@ function readServerDb(): Record<string, any> {
     auditLogs: [],
     expenses: [],
     cashMovements: [],
-    dailyClosings: []
+    dailyClosings: [],
+    purchaseOrders: [],
+    ingredients: [],
+    recipes: [],
+    stockMovements: [],
+    wasteRecords: []
   };
 }
 
