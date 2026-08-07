@@ -14,7 +14,7 @@ interface DashboardProps {
   tables: Table[];
   kitchenTickets: KitchenTicket[];
   menuItems: MenuItem[];
-  currentShift: Shift | null;
+  currentShift?: Shift | null;
   setActiveTab: (tab: TabType) => void;
   darkMode: boolean;
   language?: Language;

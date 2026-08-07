@@ -18,7 +18,6 @@ export type TabType =
   | 'menu_management'
   | 'pool_sauna' 
   | 'stock' 
-  | 'shifts' 
   | 'report' 
   | 'whatsapp_reports'
   | 'notifications'
@@ -81,7 +80,6 @@ export const Navigation: React.FC<NavigationProps> = ({
       badge: lowStockCount > 0 ? lowStockCount : null,
       badgeColor: 'bg-amber-500 text-white'
     },
-    { id: 'shifts' as TabType, label: t.shifts, icon: ReceiptText },
     { id: 'report' as TabType, label: t.dailyReport, icon: FileBarChart },
     { id: 'whatsapp_reports' as TabType, label: 'WhatsApp Automation', icon: MessageSquare, managerOnly: true },
     { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },

@@ -8,7 +8,7 @@ import { formatCurrency } from '../lib/currency';
 import { Language } from '../lib/translations';
 
 interface HeaderProps {
-  currentShift: Shift | null;
+  currentShift?: Shift | null;
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
   currentUser?: AppUser | null;
@@ -18,7 +18,7 @@ interface HeaderProps {
   language?: Language;
   setLanguage?: (lang: Language) => void;
   lowStockCount: number;
-  openShiftModal: () => void;
+  openShiftModal?: () => void;
   onNavigateToStock: () => void;
 }
 

@@ -26,11 +26,11 @@ interface PosTerminalProps {
   waiters: Waiter[];
   guestRooms: GuestRoom[];
   ingredients?: KitchenIngredient[];
-  currentShift: Shift | null;
+  currentShift?: Shift | null;
   onOrderCompleted: (order: Order, newKot?: KitchenTicket) => void;
   darkMode: boolean;
   currentUser?: AppUser;
-  openShiftModal: () => void;
+  openShiftModal?: () => void;
   language?: Language;
 }
 

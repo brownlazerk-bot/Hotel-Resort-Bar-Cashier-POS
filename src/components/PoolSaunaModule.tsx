@@ -8,10 +8,10 @@ import { printPoolTokenTicket, printSaunaTokenTicket } from '../lib/serviceToken
 
 interface PoolSaunaModuleProps {
   menuItems: MenuItem[];
-  currentShift: Shift | null;
+  currentShift?: Shift | null;
   onTicketSold: (order: Order) => void;
   darkMode: boolean;
-  openShiftModal: () => void;
+  openShiftModal?: () => void;
 }
 
 export const PoolSaunaModule: React.FC<PoolSaunaModuleProps> = ({
@@ -33,17 +33,14 @@ export const PoolSaunaModule: React.FC<PoolSaunaModuleProps> = ({
 
   const handleSellPass = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentShift) {
-      alert('You must open a Cashier Shift before selling tickets!');
-      openShiftModal();
-      return;
-    }
     if (!selectedItem) {
       alert('Please select a ticket pass service.');
       return;
     }
 
     const orderId = `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const cashierTitle = currentShift?.cashierName || 'Pool/Sauna Cashier';
 
     const newOrder: Order = {
       id: orderId,
@@ -77,15 +74,15 @@ export const PoolSaunaModule: React.FC<PoolSaunaModuleProps> = ({
           timestamp: new Date().toISOString(),
           amount: totalAmount,
           method: paymentMethod,
-          cashierName: currentShift.cashierName,
+          cashierName: cashierTitle,
           note: 'Ticket pass full payment'
         }
       ],
       status: 'Paid',
       createdAt: new Date().toISOString(),
       paidAt: new Date().toISOString(),
-      shiftId: currentShift.id,
-      cashierName: currentShift.cashierName
+      shiftId: currentShift?.id || 'sh-default',
+      cashierName: cashierTitle
     };
 
     onTicketSold(newOrder);
@@ -95,8 +92,8 @@ export const PoolSaunaModule: React.FC<PoolSaunaModuleProps> = ({
       id: `${selectedItem.category === 'Pool Services' ? 'POOL' : 'SAUNA'}-${Math.floor(1000 + Math.random() * 9000)}`,
       orderId: newOrder.id,
       tableNumber: 'Pool & Sauna Desk',
-      waiterName: currentShift.cashierName,
-      cashierName: currentShift.cashierName,
+      waiterName: cashierTitle,
+      cashierName: cashierTitle,
       customerName: newOrder.customerName,
       orderTime: newOrder.createdAt,
       paymentStatus: 'PAID',

@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
-import { DailyReportData, Order, Shift } from '../types';
+import { DailyReportData, Order } from '../types';
 import { formatCurrency } from './currency';
 
 export function printReportHTML(title: string, htmlContent: string) {
@@ -353,80 +353,6 @@ export function exportDailyReportExcel(report: DailyReportData) {
   XLSX.utils.book_append_sheet(wb, wsBest, 'Top Drinks');
 
   XLSX.writeFile(wb, `Daily_Report_Bar_${report.date}.xlsx`);
-}
-
-export function exportShiftReportPDF(shift: Shift, orders: Order[]) {
-  const doc = new jsPDF();
-  const shiftOrders = orders.filter(o => o.shiftId === shift.id && o.status === 'Paid');
-
-  const totalRev = shiftOrders.reduce((sum, o) => sum + o.total, 0);
-  const cashTotal = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cashPaid || 0) - (o.paymentDetails?.changeGiven || 0), 0);
-  const cardTotal = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cardPaid || 0), 0);
-  const momoTotal = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.mobileMoneyPaid || 0), 0);
-  const roomTotal = shiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.roomChargeAmount || 0), 0);
-
-  doc.setFont('Helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('CASHIER SHIFT RECONCILIATION REPORT', 14, 18);
-
-  doc.setFontSize(10);
-  doc.setFont('Helvetica', 'normal');
-  doc.text(`Shift ID: ${shift.id}  |  Cashier: ${shift.cashierName}`, 14, 26);
-  doc.text(`Opened: ${new Date(shift.openedAt).toLocaleString()}`, 14, 32);
-  if (shift.closedAt) {
-    doc.text(`Closed: ${new Date(shift.closedAt).toLocaleString()}`, 14, 38);
-  }
-
-  doc.line(14, 42, 196, 42);
-
-  let y = 50;
-  doc.setFont('Helvetica', 'bold');
-  doc.text('CASH DRAWER RECONCILIATION', 14, y);
-  y += 6;
-
-  doc.setFont('Helvetica', 'normal');
-  const cashRows = [
-    ['Opening Cash Float:', formatCurrency(shift.openingCash)],
-    ['Cash Sales Collected:', formatCurrency(cashTotal)],
-    ['Expected Cash in Drawer:', formatCurrency(shift.openingCash + cashTotal)],
-    ['Actual Cash Counted:', shift.closingCashActual !== undefined ? formatCurrency(shift.closingCashActual) : 'Shift Still Open'],
-    ['Discrepancy (Over/Short):', shift.difference !== undefined ? formatCurrency(shift.difference) : 'N/A'],
-  ];
-
-  cashRows.forEach(([lbl, val]) => {
-    doc.text(lbl, 14, y);
-    doc.setFont('Helvetica', 'bold');
-    doc.text(val, 80, y);
-    doc.setFont('Helvetica', 'normal');
-    y += 6;
-  });
-
-  y += 4;
-  doc.line(14, y, 196, y);
-  y += 8;
-
-  doc.setFont('Helvetica', 'bold');
-  doc.text('SHIFT REVENUE SUMMARY', 14, y);
-  y += 6;
-
-  doc.setFont('Helvetica', 'normal');
-  const revRows = [
-    ['Total Shift Revenue:', formatCurrency(totalRev)],
-    ['Card Revenue:', formatCurrency(cardTotal)],
-    ['Mobile Money Revenue:', formatCurrency(momoTotal)],
-    ['Room/Apartment Charges:', formatCurrency(roomTotal)],
-    ['Completed Transactions:', `${shiftOrders.length}`]
-  ];
-
-  revRows.forEach(([lbl, val]) => {
-    doc.text(lbl, 14, y);
-    doc.setFont('Helvetica', 'bold');
-    doc.text(val, 80, y);
-    doc.setFont('Helvetica', 'normal');
-    y += 6;
-  });
-
-  doc.save(`Shift_Report_${shift.id}.pdf`);
 }
 
 export function exportGenericExcel(filename: string, sheetName: string, headers: string[], rows: (string | number)[][]) {

@@ -24,7 +24,7 @@ interface DailyReportViewProps {
   orders: Order[];
   menuItems: MenuItem[];
   stockLogs?: StockAdjustmentLog[];
-  currentShift: Shift | null;
+  currentShift?: Shift | null;
   allShifts?: Shift[];
   guestRooms?: GuestRoom[];
   expenses?: Expense[];
@@ -110,39 +110,21 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
     return false;
   };
 
-  // Filter Data by Shift or Date
-  const activeSelectedShift = selectedShiftId === 'current' ? currentShift : allShifts.find(s => s.id === selectedShiftId);
-
+  // Filter Data by Selected Date
   const filteredOrders = orders.filter(o => {
     if (o.status === 'Cancelled') return false;
-    if (selectedShiftId === 'all_shifts') return true;
-    if (selectedShiftId !== 'all') {
-      if (activeSelectedShift) {
-        return o.shiftId === activeSelectedShift.id || (o.businessDate && o.businessDate === activeSelectedShift.businessDate);
-      }
-      return o.shiftId === selectedShiftId;
-    }
     return matchesSelectedDate(o.createdAt, o.businessDate, selectedDate);
   });
 
   const filteredExpenses = expenses.filter(e => {
-    if (selectedShiftId !== 'all' && activeSelectedShift) {
-      return e.shiftId === activeSelectedShift.id || (e.date && e.date.startsWith(activeSelectedShift.businessDate || ''));
-    }
     return e.date === selectedDate;
   });
 
   const filteredCashMovements = cashMovements.filter(c => {
-    if (selectedShiftId !== 'all' && activeSelectedShift) {
-      return c.shiftId === activeSelectedShift.id || (c.businessDate && c.businessDate.startsWith(activeSelectedShift.businessDate || ''));
-    }
     return c.date === selectedDate;
   });
 
   const filteredDailyClosings = dailyClosings.filter(d => {
-    if (selectedShiftId !== 'all' && activeSelectedShift) {
-      return d.shiftId === activeSelectedShift.id;
-    }
     return d.date === selectedDate;
   });
 
@@ -616,40 +598,18 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
             </div>
           </div>
 
-          {/* Date & Shift Selectors & Action Controls */}
+          {/* Date Selector & Action Controls */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Shift Selector */}
-            <div className="flex items-center space-x-2 px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
-              <span className="text-xs font-bold">Shift:</span>
-              <select
-                value={selectedShiftId}
-                onChange={(e) => setSelectedShiftId(e.target.value)}
+            <div className="flex items-center space-x-2 px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              <Calendar className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-bold text-gray-500">Business Date:</span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
                 className="bg-transparent text-xs font-bold text-gray-900 dark:text-white focus:outline-none cursor-pointer"
-              >
-                <option value="all">📅 Filter by Calendar Date</option>
-                <option value="all_shifts">📋 All Shifts & Recorded Transactions</option>
-                {currentShift && (
-                  <option value="current">🟢 Active Shift #{currentShift.shiftNumber || 'Current'} ({currentShift.businessDate})</option>
-                )}
-                {allShifts.filter(s => s.id !== currentShift?.id).map(s => (
-                  <option key={s.id} value={s.id}>
-                    Shift #{s.shiftNumber || s.id} - {s.businessDate || 'Closed'} ({s.cashierName})
-                  </option>
-                ))}
-              </select>
+              />
             </div>
-
-            {selectedShiftId === 'all' && (
-              <div className="flex items-center space-x-2 px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-gray-900 dark:text-white focus:outline-none"
-                />
-              </div>
-            )}
 
             <button
               onClick={handlePrint}
