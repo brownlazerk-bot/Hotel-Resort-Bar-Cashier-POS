@@ -62,7 +62,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
-  const [selectedShiftId, setSelectedShiftId] = useState<string>('all');
+  const [selectedShiftId, setSelectedShiftId] = useState<string>(currentShift ? 'current' : 'all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [deptFilter, setDeptFilter] = useState<string>('All');
 
@@ -89,18 +89,39 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const [debtPayAmount, setDebtPayAmount] = useState<string>('');
   const [debtPayMethod, setDebtPayMethod] = useState<PaymentMethod>('Cash');
 
+  // Flexible Date & Shift Matching Helper
+  const matchesSelectedDate = (createdAtIso?: string, businessDateStr?: string, targetDateStr?: string) => {
+    if (!targetDateStr) return true;
+    if (createdAtIso) {
+      if (createdAtIso.startsWith(targetDateStr)) return true;
+      try {
+        const localDateIso = new Date(createdAtIso).toLocaleDateString('sv'); // 'YYYY-MM-DD'
+        if (localDateIso === targetDateStr) return true;
+      } catch (e) {}
+    }
+    if (businessDateStr) {
+      if (businessDateStr.startsWith(targetDateStr)) return true;
+      try {
+        const targetFormatted = new Date(targetDateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+        if (businessDateStr === targetFormatted || businessDateStr.includes(targetDateStr)) return true;
+      } catch (e) {}
+    }
+    return false;
+  };
+
   // Filter Data by Shift or Date
   const activeSelectedShift = selectedShiftId === 'current' ? currentShift : allShifts.find(s => s.id === selectedShiftId);
 
   const filteredOrders = orders.filter(o => {
     if (o.status === 'Cancelled') return false;
+    if (selectedShiftId === 'all_shifts') return true;
     if (selectedShiftId !== 'all') {
       if (activeSelectedShift) {
         return o.shiftId === activeSelectedShift.id || (o.businessDate && o.businessDate === activeSelectedShift.businessDate);
       }
       return o.shiftId === selectedShiftId;
     }
-    return o.createdAt.startsWith(selectedDate) || (o.businessDate && o.businessDate.startsWith(selectedDate));
+    return matchesSelectedDate(o.createdAt, o.businessDate, selectedDate);
   });
 
   const filteredExpenses = expenses.filter(e => {
@@ -605,6 +626,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
                 className="bg-transparent text-xs font-bold text-gray-900 dark:text-white focus:outline-none cursor-pointer"
               >
                 <option value="all">📅 Filter by Calendar Date</option>
+                <option value="all_shifts">📋 All Shifts & Recorded Transactions</option>
                 {currentShift && (
                   <option value="current">🟢 Active Shift #{currentShift.shiftNumber || 'Current'} ({currentShift.businessDate})</option>
                 )}
@@ -818,8 +840,22 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-medium">
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="py-8 text-center text-gray-400">
-                        No transactions recorded for {selectedDate}.
+                      <td colSpan={12} className="py-12 text-center">
+                        <div className="max-w-md mx-auto space-y-3">
+                          <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">
+                            {orders.length === 0 
+                              ? "Nta cyacurujwe kirabandikwa mu sisitemu / No sales orders recorded in the system yet."
+                              : `Nta cyacurujwe kibonetse ku date ya ${selectedDate} / No orders match the selected filter.`}
+                          </p>
+                          {orders.length > 0 && (
+                            <button
+                              onClick={() => setSelectedShiftId('all_shifts')}
+                              className="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+                            >
+                              Show All {orders.length} System Orders (All Shifts & Dates)
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ) : (
