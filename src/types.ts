@@ -267,6 +267,7 @@ export interface KitchenTicket {
   specialNotes?: string;
   orderType?: string;
   ticketType?: 'NEW ORDER' | 'UPDATED ORDER' | 'CANCELLED ITEM';
+  createdAt?: string;
 }
 
 export interface OrderItem {
@@ -355,6 +356,7 @@ export interface Order {
   paymentDetails?: PaymentDetails;
   paymentHistory?: PaymentTransaction[];
   createdAt: string; // ISO
+  updatedAt?: string; // ISO
   paidAt?: string; // ISO
   shiftId: string;
   businessDate?: string;
@@ -539,6 +541,7 @@ export interface CashMovement {
   reason: string;
   user: string;
   shiftId?: string;
+  businessDate?: string;
   referenceId?: string; // Order ID, Expense ID, or Shift ID
 }
 
@@ -613,6 +616,8 @@ export interface AppUser {
   lastLoginAt?: string;
   isSuperAdmin?: boolean; // Hidden internal system marker
 }
+
+export type User = AppUser;
 
 export interface AuditLog {
   id: string;

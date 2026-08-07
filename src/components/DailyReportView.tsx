@@ -62,6 +62,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
+  const [selectedShiftId, setSelectedShiftId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [deptFilter, setDeptFilter] = useState<string>('All');
 
@@ -88,22 +89,40 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const [debtPayAmount, setDebtPayAmount] = useState<string>('');
   const [debtPayMethod, setDebtPayMethod] = useState<PaymentMethod>('Cash');
 
-  // Filter Data by Date
-  const filteredOrders = orders.filter(
-    o => o.createdAt.startsWith(selectedDate) && o.status !== 'Cancelled'
-  );
+  // Filter Data by Shift or Date
+  const activeSelectedShift = selectedShiftId === 'current' ? currentShift : allShifts.find(s => s.id === selectedShiftId);
 
-  const filteredExpenses = expenses.filter(
-    e => e.date === selectedDate
-  );
+  const filteredOrders = orders.filter(o => {
+    if (o.status === 'Cancelled') return false;
+    if (selectedShiftId !== 'all') {
+      if (activeSelectedShift) {
+        return o.shiftId === activeSelectedShift.id || (o.businessDate && o.businessDate === activeSelectedShift.businessDate);
+      }
+      return o.shiftId === selectedShiftId;
+    }
+    return o.createdAt.startsWith(selectedDate) || (o.businessDate && o.businessDate.startsWith(selectedDate));
+  });
 
-  const filteredCashMovements = cashMovements.filter(
-    c => c.date === selectedDate
-  );
+  const filteredExpenses = expenses.filter(e => {
+    if (selectedShiftId !== 'all' && activeSelectedShift) {
+      return e.shiftId === activeSelectedShift.id || (e.date && e.date.startsWith(activeSelectedShift.businessDate || ''));
+    }
+    return e.date === selectedDate;
+  });
 
-  const filteredDailyClosings = dailyClosings.filter(
-    d => d.date === selectedDate
-  );
+  const filteredCashMovements = cashMovements.filter(c => {
+    if (selectedShiftId !== 'all' && activeSelectedShift) {
+      return c.shiftId === activeSelectedShift.id || (c.businessDate && c.businessDate.startsWith(activeSelectedShift.businessDate || ''));
+    }
+    return c.date === selectedDate;
+  });
+
+  const filteredDailyClosings = dailyClosings.filter(d => {
+    if (selectedShiftId !== 'all' && activeSelectedShift) {
+      return d.shiftId === activeSelectedShift.id;
+    }
+    return d.date === selectedDate;
+  });
 
   // Automatic Financial Calculations
   const paidOrders = filteredOrders.filter(
@@ -575,17 +594,39 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
             </div>
           </div>
 
-          {/* Date Picker & Action Controls */}
+          {/* Date & Shift Selectors & Action Controls */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center space-x-2 px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-              <Calendar className="w-4 h-4 text-gray-400" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent text-xs font-bold text-gray-900 dark:text-white focus:outline-none"
-              />
+            {/* Shift Selector */}
+            <div className="flex items-center space-x-2 px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300">
+              <span className="text-xs font-bold">Shift:</span>
+              <select
+                value={selectedShiftId}
+                onChange={(e) => setSelectedShiftId(e.target.value)}
+                className="bg-transparent text-xs font-bold text-gray-900 dark:text-white focus:outline-none cursor-pointer"
+              >
+                <option value="all">📅 Filter by Calendar Date</option>
+                {currentShift && (
+                  <option value="current">🟢 Active Shift #{currentShift.shiftNumber || 'Current'} ({currentShift.businessDate})</option>
+                )}
+                {allShifts.filter(s => s.id !== currentShift?.id).map(s => (
+                  <option key={s.id} value={s.id}>
+                    Shift #{s.shiftNumber || s.id} - {s.businessDate || 'Closed'} ({s.cashierName})
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {selectedShiftId === 'all' && (
+              <div className="flex items-center space-x-2 px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-gray-900 dark:text-white focus:outline-none"
+                />
+              </div>
+            )}
 
             <button
               onClick={handlePrint}

@@ -44,11 +44,28 @@ export function mergeArraysByKey(localData: any, incomingData: any): any {
           // Local item exists that remote doesn't have yet -> keep it!
           map.set(item.id, item);
         } else {
+          // Special protection for Order objects: NEVER downgrade a PAID order to UNPAID
+          const isLocalOrderPaid = item.paymentStatus === 'PAID' || item.status === 'Paid';
+          const isRemoteOrderPaid = existing.paymentStatus === 'PAID' || existing.status === 'Paid';
+
+          if (isLocalOrderPaid && !isRemoteOrderPaid) {
+            // Local is paid, remote is unpaid -> keep local paid order
+            map.set(item.id, { ...existing, ...item, paymentStatus: item.paymentStatus, status: item.status, amountPaid: item.amountPaid, paidAt: item.paidAt });
+            return;
+          } else if (!isLocalOrderPaid && isRemoteOrderPaid) {
+            // Remote is paid, local is unpaid -> keep remote paid order
+            map.set(item.id, { ...item, ...existing, paymentStatus: existing.paymentStatus, status: existing.status, amountPaid: existing.amountPaid, paidAt: existing.paidAt });
+            return;
+          }
+
           // Compare timestamps if available
-          const localTime = new Date(item.updatedAt || item.lastRestocked || item.createdAt || 0).getTime();
-          const existingTime = new Date(existing.updatedAt || existing.lastRestocked || existing.createdAt || 0).getTime();
+          const localTime = new Date(item.updatedAt || item.paidAt || item.lastRestocked || item.createdAt || 0).getTime();
+          const existingTime = new Date(existing.updatedAt || existing.paidAt || existing.lastRestocked || existing.createdAt || 0).getTime();
+          
           if (localTime >= existingTime) {
             map.set(item.id, { ...existing, ...item });
+          } else {
+            map.set(item.id, { ...item, ...existing });
           }
         }
       }

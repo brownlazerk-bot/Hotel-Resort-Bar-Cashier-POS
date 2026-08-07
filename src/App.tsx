@@ -26,6 +26,7 @@ import {
   loadRecipes, saveRecipes
 } from './lib/storage';
 import { convertRecipeQtyToStoreQty, calculateEffectiveRecipeQty } from './lib/unitConversion';
+import { exportShiftReportPDF } from './lib/exporter';
 
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
@@ -1406,12 +1407,20 @@ export default function App() {
   };
 
   // Open New Shift
-  const handleOpenShift = (cashierName: string, openingCash: number) => {
+  const handleOpenShift = (cashierName: string, openingCash: number, customBusinessDate?: string) => {
+    const maxShiftNum = shifts.reduce((max, s) => Math.max(max, s.shiftNumber || 0), 249);
+    const nextShiftNumber = maxShiftNum + 1;
+    const busDate = customBusinessDate || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
     const newShift: Shift = {
-      id: `sh-${Math.floor(500 + Math.random() * 500)}`,
+      id: `sh-${nextShiftNumber}`,
+      shiftNumber: nextShiftNumber,
+      businessDate: busDate,
       cashierName,
-      cashierId: `c-${Date.now()}`,
+      cashierId: currentUser ? currentUser.id : `c-${Date.now()}`,
       openedAt: new Date().toISOString(),
+      openedBy: currentUser ? currentUser.fullName : cashierName,
+      openedById: currentUser?.id,
       openingCash,
       status: 'Open'
     };
@@ -1423,9 +1432,10 @@ export default function App() {
     addCashMovement({
       amount: openingCash,
       movementType: 'Opening Cash',
-      reason: `Shift Opened with Float RWF ${openingCash.toLocaleString()}`,
+      reason: `Shift #${nextShiftNumber} Opened (${busDate}) - Float Cash $${openingCash.toFixed(2)}`,
       user: cashierName,
       shiftId: newShift.id,
+      businessDate: busDate,
       referenceId: newShift.id
     });
     setCashMovements(loadCashMovements());
@@ -1436,43 +1446,78 @@ export default function App() {
     if (!currentShift) return;
 
     const shiftOrders = orders.filter(o => o.shiftId === currentShift.id);
-    const paidShiftOrders = shiftOrders.filter(o => o.status === 'Paid');
+    const paidShiftOrders = shiftOrders.filter(o => o.status === 'Paid' || o.paymentStatus === 'PAID' || o.paymentStatus === 'PARTIALLY PAID');
     const cashCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cashPaid || 0) - (o.paymentDetails?.changeGiven || 0), 0);
     const cardCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cardPaid || 0), 0);
     const momoCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.mobileMoneyPaid || 0), 0);
+    const roomCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.roomChargeAmount || 0), 0);
     const creditSalesTotal = shiftOrders.filter(o => o.paymentStatus === 'CREDIT').reduce((sum, o) => sum + (o.balance > 0 ? o.balance : o.total), 0);
-    
-    const expectedCash = currentShift.openingCash + cashCollected;
+
+    const shiftExpensesList = expenses.filter(e => e.shiftId === currentShift.id || (e.date && e.date.startsWith(currentShift.businessDate || '')));
+    const totalExp = shiftExpensesList.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    const expectedCash = currentShift.openingCash + cashCollected - totalExp;
     const diff = actualCash - expectedCash;
 
     const closedShift: Shift = {
       ...currentShift,
       closedAt: new Date().toISOString(),
+      closedBy: currentUser ? currentUser.fullName : currentShift.cashierName,
+      closedById: currentUser?.id,
       closingCashExpected: expectedCash,
       closingCashActual: actualCash,
       difference: diff,
       status: 'Closed',
-      notes
+      notes,
+      summary: {
+        totalSales: paidShiftOrders.reduce((sum, o) => sum + o.total, 0),
+        cashSales: cashCollected,
+        cardSales: cardCollected,
+        mobileMoneySales: momoCollected,
+        creditSales: creditSalesTotal,
+        discountsTotal: paidShiftOrders.reduce((sum, o) => sum + (o.discount || 0), 0),
+        taxesTotal: 0,
+        serviceChargesTotal: 0,
+        expensesTotal: totalExp,
+        openingCash: currentShift.openingCash,
+        expectedCash: expectedCash,
+        actualCash: actualCash,
+        difference: diff,
+        totalOrdersCount: shiftOrders.length,
+        cancelledOrdersCount: shiftOrders.filter(o => o.status === 'Cancelled').length,
+        voidedOrdersCount: 0,
+        kitchenOrdersCount: kitchenTickets.filter(k => k.shiftId === currentShift.id).length,
+        inventoryConsumptionCost: 0,
+        estimatedProfit: paidShiftOrders.reduce((sum, o) => sum + o.total, 0) - totalExp
+      }
     };
 
     const updatedAllShifts = shifts.map(s => s.id === closedShift.id ? closedShift : s);
     updateShiftsState(updatedAllShifts);
     updateCurrentShiftState(null);
 
+    // Auto-export Shift Closing PDF
+    try {
+      exportShiftReportPDF(closedShift, orders);
+    } catch (e) {
+      console.error('Error auto-exporting shift PDF:', e);
+    }
+
     // Record Closing Cash Movement
     addCashMovement({
       amount: actualCash,
       movementType: 'Closing Cash',
-      reason: `Shift Closed - Drawer Cash RWF ${actualCash.toLocaleString()}`,
+      reason: `Shift #${closedShift.shiftNumber || closedShift.id} Closed - Drawer Cash $${actualCash.toFixed(2)}`,
       user: currentShift.cashierName,
       shiftId: currentShift.id,
+      businessDate: currentShift.businessDate,
       referenceId: currentShift.id
     });
     setCashMovements(loadCashMovements());
 
     // Record Daily Closing Reconciliation Record
     addDailyClosing({
-      date: new Date().toISOString().split('T')[0],
+      date: currentShift.businessDate || new Date().toISOString().split('T')[0],
       closedBy: currentShift.cashierName,
       shiftId: currentShift.id,
       openingCash: currentShift.openingCash,
@@ -1480,7 +1525,7 @@ export default function App() {
       cardSales: cardCollected,
       mobileMoneySales: momoCollected,
       creditSales: creditSalesTotal,
-      expensesTotal: expenses.reduce((s, e) => s + e.amount, 0),
+      expensesTotal: totalExp,
       creditCollectedTotal: 0,
       outstandingCredit: creditSalesTotal,
       cashDeposited: actualCash,
@@ -1492,6 +1537,23 @@ export default function App() {
       varianceStatus: diff === 0 ? 'Approved' : 'Pending Review'
     });
     setDailyClosings(loadDailyClosings());
+  };
+
+  // Reopen Shift (Admin / Super Admin Only)
+  const handleReopenShift = (shiftId: string) => {
+    const targetShift = shifts.find(s => s.id === shiftId);
+    if (!targetShift) return;
+
+    const reopenedShift: Shift = {
+      ...targetShift,
+      status: 'Open',
+      reopenedAt: new Date().toISOString(),
+      reopenedBy: currentUser ? currentUser.fullName : 'Admin'
+    };
+
+    const updatedAllShifts = shifts.map(s => s.id === shiftId ? reopenedShift : s);
+    updateShiftsState(updatedAllShifts);
+    updateCurrentShiftState(reopenedShift);
   };
 
   // Manager Actions
@@ -1850,8 +1912,13 @@ export default function App() {
             currentShift={currentShift}
             allShifts={shifts}
             orders={orders}
+            expenses={expenses}
+            kitchenTickets={kitchenTickets}
+            currentUser={currentUser}
+            userRole={userRole}
             onOpenShift={handleOpenShift}
             onCloseShift={handleCloseShift}
+            onReopenShift={handleReopenShift}
             darkMode={darkMode}
           />
         )}
