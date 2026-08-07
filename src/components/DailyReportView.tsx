@@ -34,6 +34,7 @@ interface DailyReportViewProps {
   onAddExpense?: (expense: Omit<Expense, 'id' | 'expenseNumber' | 'timestamp'>) => void;
   onAddCashMovement?: (movement: Omit<CashMovement, 'id' | 'timestamp' | 'date' | 'time'>) => void;
   onUpdateOrder?: (updatedOrder: Order) => void;
+  onPrintReceipt?: (order: Order) => void;
   onUpdateDailyClosing?: (closings: DailyClosingRecord[]) => void;
   darkMode: boolean;
   language?: Language;
@@ -55,6 +56,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   onAddExpense,
   onAddCashMovement,
   onUpdateOrder,
+  onPrintReceipt,
   onUpdateDailyClosing,
   darkMode,
   language = 'rw'
@@ -91,20 +93,23 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const [debtPayMethod, setDebtPayMethod] = useState<PaymentMethod>('Cash');
 
   // Flexible Date & Shift Matching Helper
-  const matchesSelectedDate = (createdAtIso?: string, businessDateStr?: string, targetDateStr?: string) => {
+  const matchesSelectedDate = (order: Order, targetDateStr?: string) => {
     if (!targetDateStr) return true;
-    if (createdAtIso) {
-      if (createdAtIso.startsWith(targetDateStr)) return true;
+    const datesToCheck = [order.createdAt, order.paidAt, order.updatedAt].filter(Boolean) as string[];
+    
+    for (const dStr of datesToCheck) {
+      if (dStr.startsWith(targetDateStr)) return true;
       try {
-        const localDateIso = new Date(createdAtIso).toLocaleDateString('sv'); // 'YYYY-MM-DD'
+        const localDateIso = new Date(dStr).toLocaleDateString('sv'); // 'YYYY-MM-DD'
         if (localDateIso === targetDateStr) return true;
       } catch (e) {}
     }
-    if (businessDateStr) {
-      if (businessDateStr.startsWith(targetDateStr)) return true;
+    
+    if (order.businessDate) {
+      if (order.businessDate.startsWith(targetDateStr)) return true;
       try {
         const targetFormatted = new Date(targetDateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-        if (businessDateStr === targetFormatted || businessDateStr.includes(targetDateStr)) return true;
+        if (order.businessDate === targetFormatted || order.businessDate.includes(targetDateStr)) return true;
       } catch (e) {}
     }
     return false;
@@ -113,7 +118,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   // Filter Data by Selected Date
   const filteredOrders = orders.filter(o => {
     if (o.status === 'Cancelled') return false;
-    return matchesSelectedDate(o.createdAt, o.businessDate, selectedDate);
+    return matchesSelectedDate(o, selectedDate);
   });
 
   const filteredExpenses = expenses.filter(e => {
@@ -128,17 +133,24 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
     return d.date === selectedDate;
   });
 
+  // Helper for paid orders
+  const isPaidOrder = (o: Order) => {
+    if (o.status === 'Cancelled') return false;
+    if (o.paymentStatus === 'PAID' || o.status === 'Paid') return true;
+    if ((o.status === 'Completed' || o.status === 'Served') && (o.balance <= 0.01 || (o.amountPaid && o.amountPaid >= o.total))) return true;
+    if (o.amountPaid && o.amountPaid >= o.total && o.total > 0) return true;
+    return false;
+  };
+
   // Automatic Financial Calculations
-  const paidOrders = filteredOrders.filter(
-    o => o.paymentStatus === 'PAID' || o.status === 'Paid'
-  );
+  const paidOrders = filteredOrders.filter(isPaidOrder);
 
   const pendingOrders = filteredOrders.filter(
-    o => o.paymentStatus !== 'PAID' && o.status !== 'Paid' && o.status !== 'Cancelled'
+    o => !isPaidOrder(o) && o.paymentStatus !== 'CREDIT' && o.status !== 'Credit'
   );
 
   const creditOrders = orders.filter(
-    o => o.paymentStatus === 'CREDIT' || o.status === 'Credit' || (o.balance > 0 && o.paymentStatus === 'PARTIALLY PAID')
+    o => o.status !== 'Cancelled' && (o.paymentStatus === 'CREDIT' || o.status === 'Credit' || (o.balance > 0 && o.paymentStatus === 'PARTIALLY PAID'))
   );
 
   const grossRevenue = paidOrders.reduce((sum, o) => sum + o.subtotal, 0);
@@ -838,6 +850,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
                     <th className="py-3 px-2 text-right">Total</th>
                     <th className="py-3 px-2 text-right">Paid</th>
                     <th className="py-3 px-2 text-right">Remaining</th>
+                    <th className="py-3 px-2 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-medium">

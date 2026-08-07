@@ -945,7 +945,10 @@ export default function App() {
       }
     }
 
-    const updatedOrders = orders.map(o => o.id === updatedOrder.id ? updatedOrder : o);
+    const exists = orders.some(o => o.id === updatedOrder.id);
+    const updatedOrders = exists
+      ? orders.map(o => o.id === updatedOrder.id ? updatedOrder : o)
+      : [updatedOrder, ...orders];
     updateOrdersState(updatedOrders);
 
     if (newKot) {
@@ -1938,6 +1941,7 @@ export default function App() {
             onAddExpense={handleAddExpense}
             onAddCashMovement={handleAddCashMovement}
             onUpdateOrder={handleUpdateOrder}
+            onPrintReceipt={(ord) => setReceiptOrder(ord)}
             onUpdateDailyClosing={(updatedClosings) => updateDailyClosingsState(updatedClosings)}
             darkMode={darkMode}
             language={language}
