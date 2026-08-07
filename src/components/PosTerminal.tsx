@@ -261,12 +261,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
   // Submit Order as Waiter (Send directly to Cashier & Kitchen without immediate cash payment)
   const handleSendOrderToCashierAndKitchen = () => {
-    if (!currentShift) {
-      alert('⚠️ No active shift is currently open. Please open today\'s business shift before taking orders.');
-      if (openShiftModal) openShiftModal();
-      return;
-    }
-
     if (cartItems.length === 0) {
       alert('Please add items to cart before submitting order.');
       return;
@@ -296,6 +290,7 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
     const numId = Math.floor(1000 + Math.random() * 9000);
     const orderId = `ORD-${numId}`;
     const nowIso = new Date().toISOString();
+    const currentBusDate = currentShift?.businessDate || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
     const newOrder: Order = {
       id: orderId,
@@ -321,9 +316,9 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
       paymentHistory: [],
       createdAt: nowIso,
       updatedAt: nowIso,
-      shiftId: currentShift.id,
-      businessDate: currentShift.businessDate,
-      cashierName: currentShift.cashierName || 'Cashier Desk',
+      shiftId: currentShift?.id || 'sh-default',
+      businessDate: currentBusDate,
+      cashierName: currentShift?.cashierName || currentUser?.fullName || 'Cashier Desk',
     };
 
     const foodItemsInCart = cartItems.filter(i => i.isFood || i.category === 'Food');
@@ -347,8 +342,8 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
         createdAt: nowIso,
         status: 'Pending',
         specialNotes: specialOrderNote,
-        shiftId: currentShift.id,
-        businessDate: currentShift.businessDate
+        shiftId: currentShift?.id || 'sh-default',
+        businessDate: currentBusDate
       };
       newOrder.kotGenerated = true;
       newOrder.kotId = kotId;
@@ -431,11 +426,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
 
   // Open Checkout Modal
   const handleProceedToPayment = () => {
-    if (!currentShift) {
-      alert('You must open a Cashier Shift before taking payments!');
-      openShiftModal();
-      return;
-    }
     if (cartItems.length === 0) {
       alert('Please add items to cart before checkout.');
       return;
@@ -461,12 +451,6 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
   const handleFinalCheckout = (e: React.FormEvent) => {
     e.preventDefault();
     setPaymentError('');
-
-    if (!currentShift) {
-      setPaymentError('⚠️ No active shift is currently open. Please open today\'s business shift before placing orders or processing payments.');
-      if (openShiftModal) openShiftModal();
-      return;
-    }
 
     const activeWaiter = waiters.find(w => w.id === selectedWaiterId);
     const selectedTable = tables.find(t => t.id === selectedTableId);
@@ -604,16 +588,16 @@ export const PosTerminal: React.FC<PosTerminalProps> = ({
           timestamp: nowIso,
           amount: amountPaid,
           method: paymentMethod,
-          cashierName: currentShift.cashierName || 'Cashier',
+          cashierName: currentShift?.cashierName || currentUser?.fullName || 'Cashier',
           note: 'Initial checkout payment'
         }
       ] : [],
       createdAt: nowIso,
       updatedAt: nowIso,
       paidAt: paymentStatus === 'PAID' ? nowIso : undefined,
-      shiftId: currentShift.id,
-      businessDate: currentShift.businessDate,
-      cashierName: currentShift.cashierName || 'Cashier',
+      shiftId: currentShift?.id || 'sh-default',
+      businessDate: currentShift?.businessDate || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+      cashierName: currentShift?.cashierName || currentUser?.fullName || 'Cashier',
     };
 
     // Check if food items exist for Bon de Commande (Kitchen Order Ticket)

@@ -4,7 +4,8 @@ import {
   ChefHat, Waves, Flame, Building, DollarSign, Calendar, 
   TrendingUp, AlertTriangle, User, Search, PlusCircle, CreditCard,
   FileText, ShieldCheck, CheckCircle2, XCircle, ArrowUpRight,
-  ArrowDownRight, RefreshCw, Phone, Clock, Tag, Layers, Check, X
+  ArrowDownRight, RefreshCw, Phone, Clock, Tag, Layers, Check, X,
+  ShoppingBag
 } from 'lucide-react';
 import { 
   Order, MenuItem, Shift, DailyReportData, Expense, CashMovement, 
@@ -62,7 +63,7 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
-  const [selectedShiftId, setSelectedShiftId] = useState<string>(currentShift ? 'current' : 'all');
+  const [selectedShiftId, setSelectedShiftId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [deptFilter, setDeptFilter] = useState<string>('All');
 
@@ -799,10 +800,10 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <div>
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white">
-                  Master Transaction Details Ledger
+                  Ibyacurujwe & Imyenda (Sales & Transaction Ledger)
                 </h3>
                 <p className="text-xs text-gray-500">
-                  Every order, payment, customer, waiter, cashier, description, and balance for {selectedDate}.
+                  Detailed list of all sales orders, highlighting paid transactions and outstanding unpaid balances.
                 </p>
               </div>
 
@@ -816,6 +817,48 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 rounded-xl text-xs border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
+              </div>
+            </div>
+
+            {/* Quick Status Summary Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200/80 dark:border-gray-700/80">
+              <div className="flex items-center space-x-3 p-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-2xs">
+                <div className="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase">Ibyacurujwe Byose / Total Sales</p>
+                  <p className="text-sm font-black text-gray-900 dark:text-white">
+                    {formatCurrency(filteredOrders.reduce((sum, o) => sum + o.total, 0))}
+                  </p>
+                  <p className="text-[10px] text-gray-500">{filteredOrders.length} Orders Recorded</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3 p-2 rounded-lg bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-900/50 shadow-2xs">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Ibyishyuwe / Total Paid</p>
+                  <p className="text-sm font-black text-emerald-700 dark:text-emerald-300">
+                    {formatCurrency(netSalesRevenue)}
+                  </p>
+                  <p className="text-[10px] text-emerald-600/80">{paidOrders.length} Paid Orders</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3 p-2 rounded-lg bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-900/50 shadow-2xs">
+                <div className="p-2 rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">Ibitarishyuwe / Total Unpaid / Credit</p>
+                  <p className="text-sm font-black text-amber-700 dark:text-amber-300">
+                    {formatCurrency(totalOutstandingCredit + pendingOrdersTotalValue)}
+                  </p>
+                  <p className="text-[10px] text-amber-600/80">{pendingOrders.length + creditOrders.length} Unpaid / Credit Orders</p>
+                </div>
               </div>
             </div>
 
