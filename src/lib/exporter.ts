@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
-import { DailyReportData, Order } from '../types';
+import { DailyReportData, Order, Shift } from '../types';
 import { formatCurrency } from './currency';
 
 export function printReportHTML(title: string, htmlContent: string) {
@@ -413,5 +413,120 @@ export function exportGenericPDF(title: string, subtitle: string, headers: strin
   });
 
   doc.save(`${filename}.pdf`);
+}
+
+export function exportShiftReportPDF(shift: Shift, orders: Order[]) {
+  const shiftOrders = orders.filter(o => o.shiftId === shift.id);
+  const paidOrders = shiftOrders.filter(o => o.status === 'Paid' || o.paymentStatus === 'PAID' || o.paymentStatus === 'PARTIALLY PAID');
+  
+  const cashSales = paidOrders.reduce((sum, o) => sum + (o.paymentDetails?.cashPaid || 0) - (o.paymentDetails?.changeGiven || 0), 0);
+  const cardSales = paidOrders.reduce((sum, o) => sum + (o.paymentDetails?.cardPaid || 0), 0);
+  const momoSales = paidOrders.reduce((sum, o) => sum + (o.paymentDetails?.mobileMoneyPaid || 0), 0);
+  const roomSales = paidOrders.reduce((sum, o) => sum + (o.paymentDetails?.roomChargeAmount || 0), 0);
+  const totalSales = paidOrders.reduce((sum, o) => sum + o.total, 0);
+
+  const doc = new jsPDF();
+
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('SKY VIEW RESORT APARTMENT', 14, 18);
+  
+  doc.setFontSize(13);
+  doc.text(`CASHIER SHIFT REGISTER CLOSING REPORT - SHIFT #${shift.shiftNumber || shift.id}`, 14, 26);
+  
+  doc.setFontSize(10);
+  doc.setFont('Helvetica', 'normal');
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Business Date: ${shift.businessDate}  |  Status: ${shift.status}`, 14, 33);
+  doc.text(`Cashier: ${shift.cashierName}  |  Opened: ${new Date(shift.openedAt).toLocaleString()}`, 14, 39);
+  if (shift.closedAt) {
+    doc.text(`Closed At: ${new Date(shift.closedAt).toLocaleString()}  |  Closed By: ${shift.closedBy || shift.cashierName}`, 14, 45);
+  }
+
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(200, 200, 200);
+  doc.line(14, 49, 196, 49);
+
+  let y = 56;
+
+  // Float & Tally Metrics
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text('1. CASH DRAWER TALLY & RECONCILIATION', 14, y);
+  y += 7;
+
+  doc.setFontSize(10);
+  doc.setFont('Helvetica', 'normal');
+  const metrics = [
+    ['Opening Float Cash:', formatCurrency(shift.openingCash), 'Cash Collected:', formatCurrency(cashSales)],
+    ['POS Card Payments:', formatCurrency(cardSales), 'Mobile Money:', formatCurrency(momoSales)],
+    ['Room Charges:', formatCurrency(roomSales), 'TOTAL SHIFT SALES:', formatCurrency(totalSales)],
+    ['Expected Cash in Drawer:', formatCurrency(shift.closingCashExpected || 0), 'Actual Cash Counted:', formatCurrency(shift.closingCashActual || 0)],
+    ['Variance / Discrepancy:', formatCurrency(shift.difference || 0), 'Total Orders Processed:', `${shiftOrders.length}`]
+  ];
+
+  metrics.forEach(([lbl1, val1, lbl2, val2]) => {
+    doc.text(lbl1, 14, y);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(val1, 62, y);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.text(lbl2, 110, y);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(val2, 160, y);
+
+    doc.setFont('Helvetica', 'normal');
+    y += 6;
+  });
+
+  if (shift.notes) {
+    y += 2;
+    doc.setFont('Helvetica', 'italic');
+    doc.text(`Closing Notes: ${shift.notes}`, 14, y);
+    y += 6;
+  }
+
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 8;
+
+  // Shift Orders
+  doc.setFont('Helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('2. SHIFT ORDER TRANSACTIONS', 14, y);
+  y += 7;
+
+  doc.setFontSize(9);
+  doc.text('Order #', 14, y);
+  doc.text('Table/Room', 50, y);
+  doc.text('Method', 90, y);
+  doc.text('Status', 130, y);
+  doc.text('Total', 165, y);
+  y += 4;
+  doc.line(14, y, 196, y);
+  y += 5;
+
+  doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(8.5);
+  shiftOrders.slice(0, 25).forEach(o => {
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.text(o.orderNumber || o.id, 14, y);
+    doc.text(o.tableNumber ? `Table ${o.tableNumber}` : o.paymentDetails?.roomOrAptNumber ? `Room ${o.paymentDetails.roomOrAptNumber}` : 'Counter', 50, y);
+    doc.text(o.paymentMethod || 'Cash', 90, y);
+    doc.text(o.status, 130, y);
+    doc.text(formatCurrency(o.total), 165, y);
+    y += 5;
+  });
+
+  y += 6;
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
+  doc.text('*** Official Cashier Shift Register Closing Document ***', 14, y);
+
+  doc.save(`Shift_${shift.shiftNumber || shift.id}_Report.pdf`);
 }
 

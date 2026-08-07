@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   MenuItem, Table, Waiter, Order, KitchenTicket, 
-  StockAdjustmentLog, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser,
+  StockAdjustmentLog, Shift, GuestRoom, UserRole, KitchenTicketStatus, TableStatus, AppUser,
   Expense, CashMovement, DailyClosingRecord, PurchaseOrder, KitchenIngredient, RecipeIngredient,
   StockMovementRecord, KitchenWasteRecord, Recipe
 } from './types';
@@ -14,6 +14,7 @@ import {
   loadMenuItems, saveMenuItems, loadTables, saveTables, 
   loadWaiters, saveWaiters, loadOrders, saveOrders, 
   loadKitchenTickets, saveKitchenTickets, loadStockLogs, saveStockLogs, 
+  loadShifts, saveShifts, loadCurrentShift, saveCurrentShift,
   loadGuestRooms, saveGuestRooms, resetAllDataToDefault,
   loadCurrentUser, saveCurrentUser, clearCurrentUser, addAuditLog,
   loadExpenses, saveExpenses, addExpense,
@@ -25,6 +26,7 @@ import {
   loadRecipes, saveRecipes
 } from './lib/storage';
 import { convertRecipeQtyToStoreQty, calculateEffectiveRecipeQty } from './lib/unitConversion';
+import { exportShiftReportPDF } from './lib/exporter';
 
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
@@ -34,6 +36,7 @@ import { TablesGrid } from './components/TablesGrid';
 import { KitchenTickets } from './components/KitchenTickets';
 import { PoolSaunaModule } from './components/PoolSaunaModule';
 import { StockManagement } from './components/StockManagement';
+import { ShiftManager } from './components/ShiftManager';
 import { DailyReportView } from './components/DailyReportView';
 import { ManagerSettings } from './components/ManagerSettings';
 import { ReceiptModal } from './components/ReceiptModal';
@@ -75,6 +78,8 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [kitchenTickets, setKitchenTickets] = useState<KitchenTicket[]>([]);
   const [stockLogs, setStockLogs] = useState<StockAdjustmentLog[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [guestRooms, setGuestRooms] = useState<GuestRoom[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
@@ -101,6 +106,8 @@ export default function App() {
     setOrders(loadOrders());
     setKitchenTickets(loadKitchenTickets());
     setStockLogs(loadStockLogs());
+    setShifts(loadShifts());
+    setCurrentShift(loadCurrentShift());
     setGuestRooms(loadGuestRooms());
     setExpenses(loadExpenses());
     setCashMovements(loadCashMovements());
@@ -275,6 +282,16 @@ export default function App() {
     saveStockLogs(newLogs);
   };
 
+  const updateShiftsState = (newShifts: Shift[]) => {
+    setShifts(newShifts);
+    saveShifts(newShifts);
+  };
+
+  const updateCurrentShiftState = (shift: Shift | null) => {
+    setCurrentShift(shift);
+    saveCurrentShift(shift);
+  };
+
   const updateGuestRoomsState = (newRooms: GuestRoom[]) => {
     setGuestRooms(newRooms);
     saveGuestRooms(newRooms);
@@ -295,6 +312,7 @@ export default function App() {
       movementType: 'Expense Paid',
       reason: `Expense [${exp.category}]: ${exp.description}`,
       user: exp.approvedBy || exp.requestedBy || 'Staff',
+      shiftId: currentShift?.id,
       referenceId: created.id
     });
     setCashMovements(loadCashMovements());
@@ -668,7 +686,7 @@ export default function App() {
           newStock: newStock,
           reason: `${reasonText} (Order #${orderToCancel.orderNumber || orderToCancel.id})`,
           timestamp: new Date().toISOString(),
-          actor: currentUser?.fullName || 'Cashier'
+          actor: currentShift?.cashierName || currentUser?.fullName || 'System'
         });
       }
     });
@@ -808,7 +826,7 @@ export default function App() {
             newStock: newStock,
             reason: `Order Edit #${updatedOrder.orderNumber || updatedOrder.id} (${diff < 0 ? 'Item Returned to Stock' : 'Item Added'})`,
             timestamp: new Date().toISOString(),
-            actor: currentUser?.fullName || 'Cashier'
+            actor: currentShift?.cashierName || currentUser?.fullName || 'System'
           });
         }
       }
@@ -839,7 +857,7 @@ export default function App() {
             newStock: newStock,
             reason: `Order Edit #${updatedOrder.orderNumber || updatedOrder.id} (New Item Added)`,
             timestamp: new Date().toISOString(),
-            actor: currentUser?.fullName || 'Cashier'
+            actor: currentShift?.cashierName || currentUser?.fullName || 'System'
           });
         }
       }
@@ -1005,7 +1023,7 @@ export default function App() {
       newStock,
       reason,
       timestamp: new Date().toISOString(),
-      actor: currentUser?.fullName || 'Bar Manager'
+      actor: currentShift?.cashierName || currentUser?.fullName || 'Bar Manager'
     };
 
     updateMenuItemsState(updatedItems);
@@ -1066,7 +1084,7 @@ export default function App() {
       targetLocation: 'Bar Stock',
       reason: reason || 'Exported from Main Beverage Stock to Bar',
       timestamp: new Date().toISOString(),
-      actor: currentUser?.fullName || 'Storekeeper'
+      actor: currentShift?.cashierName || currentUser?.fullName || 'Storekeeper'
     };
 
     updateMenuItemsState(updatedItems);
@@ -1119,7 +1137,7 @@ export default function App() {
       sourceLocation: 'Main Beverage Stock',
       reason: reason || 'Main Beverage Stock Direct Record/Edit',
       timestamp: new Date().toISOString(),
-      actor: currentUser?.fullName || 'Storekeeper'
+      actor: currentShift?.cashierName || currentUser?.fullName || 'Storekeeper'
     };
 
     updateMenuItemsState(updatedItems);
@@ -1173,7 +1191,7 @@ export default function App() {
       sourceLocation: 'Kitchen Stock',
       reason: reason || 'Kitchen Stock Direct Record/Edit',
       timestamp: new Date().toISOString(),
-      actor: currentUser?.fullName || 'Storekeeper'
+      actor: currentShift?.cashierName || currentUser?.fullName || 'Storekeeper'
     };
 
     updateMenuItemsState(updatedItems);
@@ -1388,6 +1406,156 @@ export default function App() {
     }
   };
 
+  // Open New Shift
+  const handleOpenShift = (cashierName: string, openingCash: number, customBusinessDate?: string) => {
+    const maxShiftNum = shifts.reduce((max, s) => Math.max(max, s.shiftNumber || 0), 249);
+    const nextShiftNumber = maxShiftNum + 1;
+    const busDate = customBusinessDate || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    const newShift: Shift = {
+      id: `sh-${nextShiftNumber}`,
+      shiftNumber: nextShiftNumber,
+      businessDate: busDate,
+      cashierName,
+      cashierId: currentUser ? currentUser.id : `c-${Date.now()}`,
+      openedAt: new Date().toISOString(),
+      openedBy: currentUser ? currentUser.fullName : cashierName,
+      openedById: currentUser?.id,
+      openingCash,
+      status: 'Open'
+    };
+
+    updateCurrentShiftState(newShift);
+    updateShiftsState([newShift, ...shifts]);
+
+    // Record Opening Cash Movement
+    addCashMovement({
+      amount: openingCash,
+      movementType: 'Opening Cash',
+      reason: `Shift #${nextShiftNumber} Opened (${busDate}) - Float Cash $${openingCash.toFixed(2)}`,
+      user: cashierName,
+      shiftId: newShift.id,
+      businessDate: busDate,
+      referenceId: newShift.id
+    });
+    setCashMovements(loadCashMovements());
+  };
+
+  // Close Active Shift
+  const handleCloseShift = (actualCash: number, notes?: string) => {
+    if (!currentShift) return;
+
+    const shiftOrders = orders.filter(o => o.shiftId === currentShift.id);
+    const paidShiftOrders = shiftOrders.filter(o => o.status === 'Paid' || o.paymentStatus === 'PAID' || o.paymentStatus === 'PARTIALLY PAID');
+    const cashCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cashPaid || 0) - (o.paymentDetails?.changeGiven || 0), 0);
+    const cardCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.cardPaid || 0), 0);
+    const momoCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.mobileMoneyPaid || 0), 0);
+    const roomCollected = paidShiftOrders.reduce((sum, o) => sum + (o.paymentDetails?.roomChargeAmount || 0), 0);
+    const creditSalesTotal = shiftOrders.filter(o => o.paymentStatus === 'CREDIT').reduce((sum, o) => sum + (o.balance > 0 ? o.balance : o.total), 0);
+
+    const shiftExpensesList = expenses.filter(e => e.shiftId === currentShift.id || (e.date && e.date.startsWith(currentShift.businessDate || '')));
+    const totalExp = shiftExpensesList.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    const expectedCash = currentShift.openingCash + cashCollected - totalExp;
+    const diff = actualCash - expectedCash;
+
+    const closedShift: Shift = {
+      ...currentShift,
+      closedAt: new Date().toISOString(),
+      closedBy: currentUser ? currentUser.fullName : currentShift.cashierName,
+      closedById: currentUser?.id,
+      closingCashExpected: expectedCash,
+      closingCashActual: actualCash,
+      difference: diff,
+      status: 'Closed',
+      notes,
+      summary: {
+        totalSales: paidShiftOrders.reduce((sum, o) => sum + o.total, 0),
+        cashSales: cashCollected,
+        cardSales: cardCollected,
+        mobileMoneySales: momoCollected,
+        creditSales: creditSalesTotal,
+        discountsTotal: paidShiftOrders.reduce((sum, o) => sum + (o.discount || 0), 0),
+        taxesTotal: 0,
+        serviceChargesTotal: 0,
+        expensesTotal: totalExp,
+        openingCash: currentShift.openingCash,
+        expectedCash: expectedCash,
+        actualCash: actualCash,
+        difference: diff,
+        totalOrdersCount: shiftOrders.length,
+        cancelledOrdersCount: shiftOrders.filter(o => o.status === 'Cancelled').length,
+        voidedOrdersCount: 0,
+        kitchenOrdersCount: kitchenTickets.filter(k => k.shiftId === currentShift.id).length,
+        inventoryConsumptionCost: 0,
+        estimatedProfit: paidShiftOrders.reduce((sum, o) => sum + o.total, 0) - totalExp
+      }
+    };
+
+    const updatedAllShifts = shifts.map(s => s.id === closedShift.id ? closedShift : s);
+    updateShiftsState(updatedAllShifts);
+    updateCurrentShiftState(null);
+
+    // Auto-export Shift Closing PDF
+    try {
+      exportShiftReportPDF(closedShift, orders);
+    } catch (e) {
+      console.error('Error auto-exporting shift PDF:', e);
+    }
+
+    // Record Closing Cash Movement
+    addCashMovement({
+      amount: actualCash,
+      movementType: 'Closing Cash',
+      reason: `Shift #${closedShift.shiftNumber || closedShift.id} Closed - Drawer Cash $${actualCash.toFixed(2)}`,
+      user: currentShift.cashierName,
+      shiftId: currentShift.id,
+      businessDate: currentShift.businessDate,
+      referenceId: currentShift.id
+    });
+    setCashMovements(loadCashMovements());
+
+    // Record Daily Closing Reconciliation Record
+    addDailyClosing({
+      date: currentShift.businessDate || new Date().toISOString().split('T')[0],
+      closedBy: currentShift.cashierName,
+      shiftId: currentShift.id,
+      openingCash: currentShift.openingCash,
+      cashSales: cashCollected,
+      cardSales: cardCollected,
+      mobileMoneySales: momoCollected,
+      creditSales: creditSalesTotal,
+      expensesTotal: totalExp,
+      creditCollectedTotal: 0,
+      outstandingCredit: creditSalesTotal,
+      cashDeposited: actualCash,
+      expectedCash,
+      actualCash,
+      difference: diff,
+      differenceReason: notes || (diff === 0 ? 'Balanced' : `Discrepancy of RWF ${diff}`),
+      approvedBy: currentUser?.fullName || 'Manager',
+      varianceStatus: diff === 0 ? 'Approved' : 'Pending Review'
+    });
+    setDailyClosings(loadDailyClosings());
+  };
+
+  // Reopen Shift (Admin / Super Admin Only)
+  const handleReopenShift = (shiftId: string) => {
+    const targetShift = shifts.find(s => s.id === shiftId);
+    if (!targetShift) return;
+
+    const reopenedShift: Shift = {
+      ...targetShift,
+      status: 'Open',
+      reopenedAt: new Date().toISOString(),
+      reopenedBy: currentUser ? currentUser.fullName : 'Admin'
+    };
+
+    const updatedAllShifts = shifts.map(s => s.id === shiftId ? reopenedShift : s);
+    updateShiftsState(updatedAllShifts);
+    updateCurrentShiftState(reopenedShift);
+  };
+
   // Manager Actions
   const handleSaveMenuItem = (item: MenuItem) => {
     const exists = menuItems.some(m => m.id === item.id);
@@ -1534,7 +1702,7 @@ export default function App() {
       
       {/* Top Header */}
       <Header
-        currentShift={null}
+        currentShift={currentShift}
         userRole={userRole}
         setUserRole={setUserRole}
         currentUser={currentUser}
@@ -1544,7 +1712,7 @@ export default function App() {
         language={language}
         setLanguage={setLanguage}
         lowStockCount={lowStockCount}
-        openShiftModal={() => {}}
+        openShiftModal={() => setActiveTab('shifts')}
         onNavigateToStock={() => setActiveTab('stock')}
       />
 
@@ -1599,7 +1767,7 @@ export default function App() {
             tables={tables}
             kitchenTickets={kitchenTickets}
             menuItems={menuItems}
-            currentShift={null}
+            currentShift={currentShift}
             setActiveTab={setActiveTab}
             darkMode={darkMode}
             language={language}
@@ -1613,7 +1781,7 @@ export default function App() {
             waiters={waiters}
             menuItems={menuItems}
             guestRooms={guestRooms}
-            cashierName={currentUser?.fullName || 'Cashier'}
+            cashierName={currentShift?.cashierName || currentUser?.fullName || 'Cashier'}
             userRole={userRole}
             darkMode={darkMode}
             onUpdateOrder={handleUpdateOrder}
@@ -1632,11 +1800,11 @@ export default function App() {
             waiters={waiters}
             guestRooms={guestRooms}
             ingredients={ingredients}
-            currentShift={null}
+            currentShift={currentShift}
             onOrderCompleted={handleOrderCompleted}
             darkMode={darkMode}
             currentUser={currentUser}
-            openShiftModal={() => {}}
+            openShiftModal={() => setActiveTab('shifts')}
             language={language}
           />
         )}
@@ -1703,10 +1871,26 @@ export default function App() {
         {activeTab === 'pool_sauna' && (
           <PoolSaunaModule
             menuItems={menuItems}
-            currentShift={null}
+            currentShift={currentShift}
             onTicketSold={(order) => handleOrderCompleted(order)}
             darkMode={darkMode}
-            openShiftModal={() => {}}
+            openShiftModal={() => setActiveTab('shifts')}
+          />
+        )}
+
+        {activeTab === 'shifts' && (
+          <ShiftManager
+            currentShift={currentShift}
+            allShifts={shifts}
+            orders={orders}
+            expenses={expenses}
+            kitchenTickets={kitchenTickets}
+            currentUser={currentUser}
+            userRole={userRole}
+            onOpenShift={handleOpenShift}
+            onCloseShift={handleCloseShift}
+            onReopenShift={handleReopenShift}
+            darkMode={darkMode}
           />
         )}
 
@@ -1744,8 +1928,8 @@ export default function App() {
             orders={orders}
             menuItems={menuItems}
             stockLogs={stockLogs}
-            currentShift={null}
-            allShifts={[]}
+            currentShift={currentShift}
+            allShifts={shifts}
             guestRooms={guestRooms}
             expenses={expenses}
             cashMovements={cashMovements}
